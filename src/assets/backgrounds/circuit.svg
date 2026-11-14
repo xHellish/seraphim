@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480">
+<!-- Opacidad general del patrón: subir o bajar para cambiar la intensidad del fondo -->
+<g opacity="0.45">
+  <!-- Pistas base -->
+  <g fill="none" stroke="#0099D9" opacity="0.32" stroke-width="2" stroke-linejoin="round" stroke-linecap="square">
+    <path d="M0 60 H110 L150 100 V180"/>
+    <path d="M40 0 V36 L76 72 H112"/>
+    <path d="M40 444 V480"/>
+    <path d="M210 0 V50 L250 90 H330 L360 120 V150"/>
+    <path d="M480 60 H420 L390 90 V150"/>
+    <path d="M0 250 H60 L90 280 V350 L120 380 H200"/>
+    <path d="M480 250 H430"/>
+    <path d="M150 180 H230 L260 210 V300"/>
+    <path d="M300 300 H380 L410 270 V200 H480"/>
+    <path d="M0 200 H20"/>
+    <path d="M260 340 V400 L300 440 V480"/>
+    <path d="M300 0 V12"/>
+    <path d="M330 480 V420 L360 390 H440 L470 360 V320"/>
+    <path d="M20 420 H90 L120 450 V480"/>
+    <path d="M120 0 V12"/>
+    <path d="M180 250 V300 L210 330 H240"/>
+  </g>
+  <!-- Pistas paralelas finas -->
+  <g fill="none" stroke="#0099D9" opacity="0.18" stroke-width="1.5">
+    <path d="M30 120 H90 L120 150 V230"/>
+    <path d="M30 128 H86 L112 154 V230"/>
+    <path d="M30 136 H82 L104 158 V230"/>
+    <path d="M330 220 H360 L380 240 V280"/>
+    <path d="M330 228 H356 L372 244 V280"/>
+  </g>
+  <!-- Chips -->
+  <g fill="#050a16" stroke="#0b3a5a" stroke-width="2">
+    <rect x="300" y="150" width="70" height="40" rx="3"/>
+    <rect x="40" y="300" width="44" height="60" rx="3"/>
+  </g>
+  <g stroke="#0b3a5a" stroke-width="2">
+    <path d="M310 146 v-6 M322 146 v-6 M334 146 v-6 M346 146 v-6 M358 146 v-6"/>
+    <path d="M310 194 v6 M322 194 v6 M334 194 v6 M346 194 v6 M358 194 v6"/>
+    <path d="M36 310 h-6 M36 322 h-6 M36 334 h-6 M36 346 h-6"/>
+    <path d="M88 310 h6 M88 322 h6 M88 334 h6 M88 346 h6"/>
+  </g>
+  <!-- Pads -->
+  <g fill="#0d5a85">
+    <rect x="147" y="177" width="6" height="6"/>
+    <rect x="109" y="69" width="6" height="6"/>
+    <rect x="357" y="147" width="6" height="6"/>
+    <rect x="387" y="147" width="6" height="6"/>
+    <rect x="257" y="297" width="6" height="6"/>
+    <rect x="197" y="377" width="6" height="6"/>
+    <rect x="427" y="247" width="6" height="6"/>
+    <rect x="17" y="197" width="6" height="6"/>
+    <rect x="237" y="327" width="6" height="6"/>
+    <rect x="297" y="9" width="6" height="6"/>
+    <rect x="117" y="9" width="6" height="6"/>
+    <rect x="467" y="317" width="6" height="6"/>
+    <rect x="17" y="417" width="6" height="6"/>
+    <rect x="257" y="337" width="6" height="6"/>
+  </g>
+  <!-- Puntos de la placa -->
+  <g fill="#16304a">
+    <rect x="200" y="120" width="3" height="3"/>
+    <rect x="440" y="130" width="3" height="3"/>
+    <rect x="150" y="300" width="3" height="3"/>
+    <rect x="400" y="440" width="3" height="3"/>
+    <rect x="60" y="180" width="3" height="3"/>
+    <rect x="320" y="360" width="3" height="3"/>
+  </g>
+  <!-- Acentos cian y naranja -->
+  <g fill="none" stroke="#00D9FF" stroke-width="2" opacity="0.55">
+    <path d="M210 0 V50 L250 90 H290"/>
+    <path d="M300 300 H350"/>
+  </g>
+  <g fill="#FF8026" opacity="0.85">
+    <rect x="148" y="98" width="4" height="4"/>
+    <rect x="388" y="88" width="4" height="4"/>
+    <rect x="88" y="278" width="4" height="4"/>
+  </g>
+</g>
+</svg>

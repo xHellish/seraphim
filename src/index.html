@@ -1,88 +1,105 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Free PDF search across the web. Every result is checked to be a real PDF.">
-  <title>Seraphim Vision</title>
-  <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/main.css">
-  <script>
-    // Aplica el tema guardado antes de pintar para evitar parpadeo
-    try {
-      const saved_theme = localStorage.getItem("theme");
-      if (saved_theme === "light" || saved_theme === "dark") {
-        document.documentElement.dataset.theme = saved_theme;
-      }
-    } catch (error) {
-      console.warn(`Could not read saved theme: ${error.message}`);
-    }
-  </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#000308">
+    <meta name="description" content="Free PDF search across the web. Every result is checked to be a real PDF.">
+    <title>Seraphim Vision</title>
+    <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+
+    <!-- Fuente pixel precargada y estilo AXM -->
+    <link rel="preload" href="assets/fonts/BitPap.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="stylesheet" href="css/axm.css?v=1">
+    <link rel="stylesheet" href="styles/main.css?v=3">
 </head>
-<body class="is-home">
-  <header class="top-bar">
-    <a id="brand-link" class="brand" href="/" aria-label="Seraphim Vision home">
-      <img class="brand-mark" src="assets/logo.svg" alt="" width="36" height="36">
-      <span class="brand-name"><span class="brand-accent">Seraphim</span> Vision</span>
-    </a>
 
-    <form id="search-form" class="search-form" role="search">
-      <label class="visually-hidden" for="search-input">Search PDFs</label>
-      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="11" cy="11" r="7"></circle>
-        <path d="m20 20-3.5-3.5"></path>
-      </svg>
-      <input id="search-input" type="search" name="q" placeholder="Search PDFs across the web" maxlength="200" autocomplete="off" spellcheck="false" required>
-      <button id="search-button" class="search-button" type="submit" aria-label="Search">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 12h14"></path>
-          <path d="m13 6 6 6-6 6"></path>
-        </svg>
-      </button>
-    </form>
+<body class="is_home">
+    <div class="ax_background" aria-hidden="true"></div>
 
-    <button id="theme-toggle" class="icon-button theme-toggle" type="button" aria-label="Toggle color theme" title="Toggle color theme">
-      <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="4"></circle>
-        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
-      </svg>
-      <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"></path>
-      </svg>
-    </button>
-  </header>
+    <main class="ax_main">
 
-  <section class="hero">
-    <p class="tagline">Free PDF search across the web. Every result is checked to be a real PDF.</p>
-    <div class="suggestions" aria-label="Example searches">
-      <button class="suggestion" type="button">linear algebra lecture notes</button>
-      <button class="suggestion" type="button">kubernetes networking guide</button>
-      <button class="suggestion" type="button">history of the roman empire</button>
-    </div>
-  </section>
+        <!-- =============================================
+             Búsqueda: portada y resultados comparten sección
+             --------------------------------------------- -->
+        <section class="ax_section" id="search">
+            <div class="sv_column">
 
-  <main class="results-area">
-    <div class="results-meta">
-      <p id="status-message" class="status-message" aria-live="polite"></p>
-      <p id="engine-warning" class="engine-warning" hidden></p>
-    </div>
-    <ol id="results-list" class="results-list"></ol>
-    <div id="skeleton-list" class="skeleton-list" hidden aria-hidden="true">
-      <div class="skeleton-item"><span></span><span></span><span></span></div>
-      <div class="skeleton-item"><span></span><span></span><span></span></div>
-      <div class="skeleton-item"><span></span><span></span><span></span></div>
-    </div>
-    <button id="load-more-button" class="load-more-button" type="button" hidden>Load more results</button>
-  </main>
+                <!-- Portada -->
+                <header class="sv_hero sv_home_only">
+                    <div class="ax_logo_wrap">
+                        <span class="ax_glitch_dash ax_glitch_dash_cyan" style="left: -34px; top: 18px; width: 26px;"></span>
+                        <span class="ax_glitch_dash ax_glitch_dash_magenta" style="left: -18px; bottom: 6px; width: 30px;"></span>
+                        <span class="ax_glitch_dash ax_glitch_dash_red" style="right: -40px; top: 10px; width: 22px;"></span>
+                        <h1 class="ax_logo sv_logo ax_glitch_target">Seraphim vision</h1>
+                    </div>
+                    <p class="ax_subtitle">SERAPHIM // PDF SEARCH</p>
+                </header>
 
-  <footer class="site-footer">
-    <p>&copy; 2025 Ben Farz · Powered by SearXNG</p>
-  </footer>
+                <!-- Título de la vista de resultados -->
+                <header class="sv_head sv_results_only">
+                    <a id="home-link" class="sv_home_link" href="/">&lt; home</a>
+                    <h2 id="results-title" class="ax_title">RESULTS</h2>
+                    <p class="ax_subtitle">SERAPHIM // PDF SEARCH</p>
+                </header>
 
-  <script type="module" src="scripts/app.js"></script>
+                <!-- Barra de búsqueda dentro de una ventana -->
+                <form id="search-form" class="sv_search" role="search">
+                    <div class="ax_window" style="--accent: var(--cyan);">
+                        <div class="ax_frame sv_search_frame" style="--accent: var(--cyan);">
+                            <div class="ax_face sv_search_face">
+                                <span class="sv_prompt" aria-hidden="true">&gt;</span>
+                                <input id="search-input" type="search" name="q" placeholder="search pdfs"
+                                    aria-label="Search PDFs" maxlength="200" autocomplete="off" spellcheck="false" required>
+                                <button id="search-button" class="ax_frame ax_button ax_button_small" type="submit"
+                                    style="--accent: var(--gold_button);">
+                                    <span class="ax_face"><span>Search</span></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Sugerencias (solo en la portada) -->
+                <div class="sv_suggestions sv_home_only">
+                    <p class="ax_section_head">&gt; try:</p>
+                    <ul class="ax_tag_list">
+                        <li><button class="ax_frame ax_tag sv_suggestion" type="button"><span class="ax_face">linear algebra notes</span></button></li>
+                        <li><button class="ax_frame ax_tag sv_suggestion" type="button"><span class="ax_face">kubernetes networking guide</span></button></li>
+                        <li><button class="ax_frame ax_tag sv_suggestion" type="button"><span class="ax_face">roman empire history</span></button></li>
+                    </ul>
+                </div>
+
+                <!-- Terminal de estado (solo en resultados) -->
+                <div class="ax_crt sv_status sv_results_only">
+                    <div class="ax_crt_screen">
+                        <div class="ax_crt_bar">
+                            <span>seraphim :: search.log</span>
+                            <span class="ax_window_dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                        </div>
+                        <div id="status-body" class="ax_crt_body" aria-live="polite"></div>
+                    </div>
+                    <span class="ax_crt_label">STATUS</span>
+                </div>
+
+                <ol id="results-list" class="sv_results sv_results_only"></ol>
+
+                <div class="sv_more sv_results_only">
+                    <button id="load-more-button" class="ax_frame ax_button" type="button" style="--accent: var(--violet);" hidden>
+                        <span class="ax_face"><span>Load more</span></span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <footer class="sv_footer">
+            <p>(c) 2025 Ben Farz // powered by SearXNG</p>
+        </footer>
+    </main>
+
+    <script src="js/axm.js?v=1"></script>
+    <script type="module" src="scripts/app.js?v=2"></script>
 </body>
+
 </html>

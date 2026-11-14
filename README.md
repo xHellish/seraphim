@@ -13,7 +13,7 @@ Results come from [SearXNG](https://github.com/searxng/searxng), a free, open so
 - Warning when a search engine is blocked (for example by a CAPTCHA)
 - In-memory cache: repeated searches answer instantly and known PDFs are not re-checked
 - Per-IP rate limiting and a download size limit
-- Clean, minimal design with automatic light and dark themes
+- Pixel art interface in the AXM style (circuit board background, framed cards, CRT status terminal)
 - Shareable search URLs (`/?q=...`) with working back and forward navigation
 - Responsive design
 
@@ -56,7 +56,9 @@ npm start
 
 ```
 server.js              Node server: static files, /api/search, /api/download, /healthz
-src/                   Search page (HTML, CSS, JavaScript)
+src/                   Search page (index.html, scripts/app.js, styles/main.css)
+src/css, src/js        AXM style kit (axm.css, axm.js), copied unchanged
+src/assets             BitPap font, circuit backgrounds, cursors and logo
 searxng/settings.yml   SearXNG configuration (JSON output, unused engines removed)
 Dockerfile             Official SearXNG image + Node binary
 docker/start.sh        Starts SearXNG (internal) and then the Node server

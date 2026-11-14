@@ -1,703 +1,288 @@
 /* =============================================
-   Theme tokens (claro por defecto, oscuro por sistema o elección)
+   Seraphim Vision: estilos propios sobre css/axm.css
+   Aquí solo va lo que el kit no trae (barra de búsqueda y resultados).
    --------------------------------------------- */
-
-:root {
-  --bg: #ffffff;
-  --surface: #f6f7fb;
-  --surface-hover: #eef0f6;
-  --border: #e3e6ee;
-  --text: #0f1222;
-  --text-muted: #5b6275;
-  --text-faint: #8c93a6;
-  --accent: #7c3aed;
-  --accent-soft: rgba(124, 58, 237, 0.1);
-  --accent-2: #0891b2;
-  --accent-2-soft: rgba(8, 145, 178, 0.1);
-  --link: #5b21b6;
-  --link-visited: #86198f;
-  --warning: #a16207;
-  --error: #dc2626;
-  --shadow: 0 1px 2px rgba(15, 18, 34, 0.04), 0 4px 16px rgba(15, 18, 34, 0.06);
-  --shadow-focus: 0 0 0 4px var(--accent-soft);
-  --bar-bg: rgba(255, 255, 255, 0.82);
-  --radius: 14px;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0b0d14;
-    --surface: #141824;
-    --surface-hover: #1b2030;
-    --border: #252b3b;
-    --text: #e8eaf2;
-    --text-muted: #9aa2b8;
-    --text-faint: #6b7287;
-    --accent: #a78bfa;
-    --accent-soft: rgba(167, 139, 250, 0.16);
-    --accent-2: #22d3ee;
-    --accent-2-soft: rgba(34, 211, 238, 0.12);
-    --link: #c4b5fd;
-    --link-visited: #e9a8f5;
-    --warning: #facc15;
-    --error: #f87171;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
-    --bar-bg: rgba(11, 13, 20, 0.8);
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --bg: #0b0d14;
-  --surface: #141824;
-  --surface-hover: #1b2030;
-  --border: #252b3b;
-  --text: #e8eaf2;
-  --text-muted: #9aa2b8;
-  --text-faint: #6b7287;
-  --accent: #a78bfa;
-  --accent-soft: rgba(167, 139, 250, 0.16);
-  --accent-2: #22d3ee;
-  --accent-2-soft: rgba(34, 211, 238, 0.12);
-  --link: #c4b5fd;
-  --link-visited: #e9a8f5;
-  --warning: #facc15;
-  --error: #f87171;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
-  --bar-bg: rgba(11, 13, 20, 0.8);
-  color-scheme: dark;
-}
-
-/* =============================================
-   Base
-   --------------------------------------------- */
-
-*,
-*::before,
-*::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 16px;
-  line-height: 1.55;
-  color: var(--text);
-  background-color: var(--bg);
-  -webkit-font-smoothing: antialiased;
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-button {
-  font: inherit;
-  color: inherit;
-}
-
-svg {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
 
 /* El atributo hidden siempre gana a los display de las clases */
 [hidden] {
-  display: none !important;
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+    display: none !important;
 }
 
 /* =============================================
-   Brand
+   Dígito 0 legible
+   En BitPap el 0 se confunde con el 8 a tamaño de texto. Los resultados traen años, versiones
+   y tamaños de archivo, así que solo el carácter 0 se toma de una fuente del sistema.
+   Si ninguna está instalada, el navegador usa el 0 de BitPap sin romper nada.
    --------------------------------------------- */
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  color: var(--text);
-  text-decoration: none;
-  flex-shrink: 0;
+@font-face {
+    font-family: 'BitPap Zero';
+    src: local('Consolas'), local('Courier New'), local('Menlo'), local('DejaVu Sans Mono');
+    unicode-range: U+0030;
 }
 
-.brand-mark {
-  display: block;
-  border-radius: 10px;
-}
-
-.brand-name {
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  white-space: nowrap;
-}
-
-.brand-accent {
-  background: linear-gradient(90deg, var(--accent-2), var(--accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.sv_result,
+.sv_status {
+    font-family: 'BitPap Zero', var(--font-pixel);
 }
 
 /* =============================================
-   Search form
+   Vistas (portada y resultados comparten sección)
    --------------------------------------------- */
-
-.search-form {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  background-color: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  box-shadow: var(--shadow);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+body.is_home .sv_results_only {
+    display: none;
 }
 
-.search-form:focus-within {
-  border-color: var(--accent);
-  box-shadow: var(--shadow), var(--shadow-focus);
+body.is_results .sv_home_only {
+    display: none;
 }
 
-.search-icon {
-  position: absolute;
-  left: 1.1rem;
-  width: 20px;
-  height: 20px;
-  color: var(--text-faint);
-  pointer-events: none;
+.sv_column {
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+}
+
+/* =============================================
+   Layout centrado (sin barra lateral)
+   El kit reserva el espacio de .ax_sidebar en .ax_main; aquí no hay barra.
+   --------------------------------------------- */
+.ax_main {
+    margin-left: 0;
+    padding: 40px 24px 32px;
+}
+
+/* En la portada el buscador queda centrado en la pantalla */
+body.is_home #search {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: calc(100vh - 170px);
+}
+
+/* =============================================
+   Cabeceras
+   --------------------------------------------- */
+.sv_hero {
+    margin-bottom: 38px;
+    text-align: center;
+}
+
+.sv_hero .ax_subtitle {
+    margin-top: 14px;
+}
+
+/* El nombre es largo: se ajusta al ancho disponible */
+.sv_logo {
+    font-size: clamp(2.2rem, 7vw, 6rem);
+    white-space: nowrap;
+}
+
+.sv_head {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+/* Enlace para volver a la portada, arriba a la izquierda de los resultados */
+.sv_home_link {
+    display: block;
+    margin-bottom: 10px;
+    text-align: left;
+    font-size: 1.4rem;
+    letter-spacing: 1px;
+    color: var(--cyan);
+}
+
+.sv_home_link:hover,
+.sv_home_link:focus-visible {
+    text-shadow: 0 0 10px var(--cyan);
+    outline: none;
+}
+
+/* =============================================
+   Barra de búsqueda
+   --------------------------------------------- */
+.sv_search {
+    max-width: 780px;
+    margin: 0 auto;
+}
+
+.sv_search_face {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 8px 7px 18px;
+}
+
+/* Al enfocar el campo el marco se ilumina, sin mover nada */
+.sv_search_frame:focus-within {
+    filter: brightness(1.25);
+}
+
+.sv_prompt {
+    font-size: 1.8rem;
+    color: var(--term_info);
 }
 
 #search-input {
-  flex: 1;
-  min-width: 0;
-  padding: 0.9rem 0.5rem 0.9rem 3rem;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 1.05rem;
-  outline: none;
+    flex: 1;
+    min-width: 0;
+    padding: 6px 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    caret-color: var(--cyan);
+    font-family: var(--font-pixel);
+    font-size: 1.6rem;
+    letter-spacing: 1px;
 }
 
 #search-input::placeholder {
-  color: var(--text-faint);
+    color: var(--text_muted);
 }
 
-/* Quitar la "x" nativa de los input search */
+/* Quita la "x" nativa de los campos de búsqueda */
 #search-input::-webkit-search-cancel-button {
-  -webkit-appearance: none;
+    -webkit-appearance: none;
 }
 
-.search-button {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  margin-right: 5px;
-  border: none;
-  border-radius: 50%;
-  background-color: var(--accent);
-  color: #ffffff;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+.sv_search_face .ax_button {
+    flex-shrink: 0;
 }
 
-.search-button svg {
-  width: 20px;
-  height: 20px;
-}
-
-.search-button:hover:not(:disabled) {
-  transform: translateX(2px);
-}
-
-.search-button:disabled {
-  opacity: 0.55;
-  cursor: wait;
+.ax_button:disabled {
+    opacity: 0.55;
+    cursor: wait;
 }
 
 /* =============================================
-   Theme toggle
+   Sugerencias
    --------------------------------------------- */
-
-.icon-button {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid transparent;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background-color 0.15s ease, color 0.15s ease;
+.sv_suggestions {
+    max-width: 780px;
+    margin: 40px auto 0;
 }
 
-.icon-button:hover {
-  background-color: var(--surface);
-  color: var(--text);
+.sv_suggestions .ax_tag_list {
+    margin-top: 16px;
 }
 
-.icon-button svg {
-  width: 20px;
-  height: 20px;
-}
-
-/* Muestra la luna en claro y el sol en oscuro */
-.icon-sun {
-  display: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .icon-sun {
-    display: block;
-  }
-
-  :root:not([data-theme="light"]) .icon-moon {
-    display: none;
-  }
-}
-
-:root[data-theme="dark"] .icon-sun {
-  display: block;
-}
-
-:root[data-theme="dark"] .icon-moon {
-  display: none;
+/* Los botones no heredan la fuente solos */
+.sv_suggestion {
+    border: 0;
+    font-family: var(--font-pixel);
+    text-align: left;
 }
 
 /* =============================================
-   Home layout (portada centrada)
+   Terminal de estado
    --------------------------------------------- */
-
-body.is-home .top-bar {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.75rem;
-  width: 100%;
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 26vh 1rem 0;
+.sv_status {
+    max-width: 780px;
+    margin: 26px auto 0;
 }
 
-body.is-home .brand-name {
-  font-size: 2.6rem;
-}
-
-body.is-home .brand-mark {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-}
-
-body.is-home .theme-toggle {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-}
-
-body.is-home .results-area {
-  display: none;
-}
-
-.hero {
-  width: 100%;
-  max-width: 640px;
-  margin: 1.25rem auto 0;
-  padding: 0 1rem;
-  text-align: center;
-}
-
-body.is-results .hero {
-  display: none;
-}
-
-.tagline {
-  color: var(--text-muted);
-  font-size: 0.95rem;
-}
-
-.suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem;
-  margin-top: 1.5rem;
-}
-
-.suggestion {
-  padding: 0.4rem 0.9rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background-color: var(--bg);
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
-}
-
-.suggestion:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background-color: var(--accent-soft);
+.sv_status .ax_crt_body p {
+    overflow-wrap: anywhere;
 }
 
 /* =============================================
-   Results layout (barra superior fija)
+   Resultados (cartas con marco de color)
    --------------------------------------------- */
-
-body.is-results .top-bar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 0.85rem max(1.25rem, calc((100vw - 1100px) / 2));
-  background-color: var(--bar-bg);
-  border-bottom: 1px solid var(--border);
-  backdrop-filter: saturate(180%) blur(12px);
-  -webkit-backdrop-filter: saturate(180%) blur(12px);
+.sv_results {
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+    margin: 34px 0 0;
+    padding: 0;
+    list-style: none;
 }
 
-body.is-results .brand-name {
-  font-size: 1.15rem;
+/* Título en el color de la carta, más chico que un nombre de proyecto */
+.sv_result_title {
+    margin: 2px 0 4px;
+    font-size: 2rem;
+    letter-spacing: 1px;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
 }
 
-body.is-results .search-form {
-  max-width: 640px;
-  box-shadow: none;
+.sv_result_link {
+    color: var(--accent);
+    text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-body.is-results .search-form:focus-within {
-  box-shadow: var(--shadow-focus);
+.sv_result_link:hover,
+.sv_result_link:focus-visible {
+    text-shadow: 0 0 12px var(--accent);
+    outline: none;
 }
 
-body.is-results #search-input {
-  padding-top: 0.65rem;
-  padding-bottom: 0.65rem;
-  font-size: 1rem;
+.sv_result_path {
+    margin-bottom: 10px;
+    font-size: 1.2rem;
+    letter-spacing: 1px;
+    color: var(--text_muted);
+    overflow-wrap: anywhere;
 }
 
-body.is-results .search-button {
-  width: 36px;
-  height: 36px;
+/* Fragmento de texto limitado a tres líneas */
+.sv_result_snippet {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 12px;
+    overflow-wrap: anywhere;
 }
 
-body.is-results .theme-toggle {
-  margin-left: auto;
+.sv_result .ax_card_actions_row {
+    margin-top: 16px;
 }
 
-.results-area {
-  width: 100%;
-  padding: 1.25rem max(1.25rem, calc((100vw - 1100px) / 2)) 3rem;
+.sv_result .ax_card_actions_row .ax_button {
+    flex: 0 0 auto;
 }
 
-/* Alinear resultados con la barra de búsqueda en escritorio */
-@media (min-width: 900px) {
-  .results-area {
-    max-width: none;
-    padding-left: calc(max(1.25rem, calc((100vw - 1100px) / 2)) + 200px);
-    padding-right: max(1.25rem, calc((100vw - 1100px) / 2));
-  }
-
-  .results-area > * {
-    max-width: 680px;
-  }
-}
-
-.results-meta {
-  margin-bottom: 1.25rem;
-}
-
-.status-message {
-  color: var(--text-faint);
-  font-size: 0.875rem;
-}
-
-.status-message.is-error {
-  color: var(--error);
-}
-
-.engine-warning {
-  margin-top: 0.35rem;
-  color: var(--warning);
-  font-size: 0.8rem;
+.sv_more {
+    display: flex;
+    justify-content: center;
+    margin-top: 34px;
 }
 
 /* =============================================
-   Result items
+   Pie
    --------------------------------------------- */
-
-.results-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 1.75rem;
-}
-
-.result {
-  animation: fade-in 0.25s ease both;
-}
-
-.result-source {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.25rem;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  min-width: 0;
-}
-
-.result-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.1rem 0.45rem;
-  border-radius: 6px;
-  background-color: var(--accent-2-soft);
-  color: var(--accent-2);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.result-path {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.result-path-file {
-  color: var(--text-faint);
-}
-
-.result-title {
-  display: inline-block;
-  font-size: 1.15rem;
-  font-weight: 600;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
-  color: var(--link);
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-
-.result-title:visited {
-  color: var(--link-visited);
-}
-
-.result-title:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.result-snippet {
-  margin-top: 0.3rem;
-  color: var(--text-muted);
-  font-size: 0.92rem;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.result-actions {
-  display: flex;
-  gap: 1.1rem;
-  margin-top: 0.5rem;
-}
-
-.result-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  font-weight: 500;
-  text-decoration: none;
-  transition: color 0.15s ease;
-}
-
-.result-action svg {
-  width: 15px;
-  height: 15px;
-}
-
-.result-action:hover {
-  color: var(--accent);
-}
-
-/* =============================================
-   Loading skeleton
-   --------------------------------------------- */
-
-.skeleton-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1.75rem;
-}
-
-.skeleton-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-}
-
-.skeleton-item span {
-  display: block;
-  height: 0.8rem;
-  border-radius: 6px;
-  background: linear-gradient(90deg, var(--surface) 0%, var(--surface-hover) 50%, var(--surface) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.2s ease-in-out infinite;
-}
-
-.skeleton-item span:nth-child(1) {
-  width: 30%;
-}
-
-.skeleton-item span:nth-child(2) {
-  width: 65%;
-  height: 1.1rem;
-}
-
-.skeleton-item span:nth-child(3) {
-  width: 90%;
-}
-
-/* =============================================
-   Load more and footer
-   --------------------------------------------- */
-
-.load-more-button {
-  display: block;
-  margin-top: 2.25rem;
-  padding: 0.65rem 1.4rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background-color: var(--bg);
-  color: var(--text);
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-
-.load-more-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  background-color: var(--accent-soft);
-}
-
-.load-more-button:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
-
-.site-footer {
-  margin-top: auto;
-  padding: 1.5rem 1rem;
-  text-align: center;
-  font-size: 0.8rem;
-  color: var(--text-faint);
-}
-
-/* =============================================
-   Animations
-   --------------------------------------------- */
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes shimmer {
-  from {
-    background-position: 200% 0;
-  }
-
-  to {
-    background-position: -200% 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation: none !important;
-    transition: none !important;
-  }
+.sv_footer {
+    margin-top: 56px;
+    text-align: center;
+    font-size: 1.15rem;
+    letter-spacing: 1px;
+    color: var(--text_muted);
 }
 
 /* =============================================
    Responsive
    --------------------------------------------- */
+@media (max-width: 768px) {
+    .ax_main {
+        padding: 28px 16px 24px;
+    }
 
-@media (max-width: 640px) {
-  body.is-home .top-bar {
-    padding-top: 20vh;
-  }
+    .sv_result_title {
+        font-size: 1.7rem;
+    }
 
-  body.is-home .brand-name {
-    font-size: 2rem;
-  }
+    .sv_search_face {
+        padding-left: 12px;
+        gap: 8px;
+    }
 
-  body.is-home .brand-mark {
-    width: 42px;
-    height: 42px;
-  }
+    .sv_prompt {
+        font-size: 1.5rem;
+    }
 
-  body.is-results .top-bar {
-    flex-wrap: wrap;
-    gap: 0.6rem 1rem;
-    padding: 0.7rem 1rem;
-  }
-
-  body.is-results .search-form {
-    order: 3;
-    max-width: none;
-  }
-
-  .results-area {
-    padding: 1rem 1rem 2.5rem;
-  }
-
-  .result-title {
-    font-size: 1.05rem;
-  }
+    #search-input {
+        font-size: 1.35rem;
+    }
 }

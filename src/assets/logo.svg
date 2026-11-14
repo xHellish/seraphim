@@ -1,13 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#06b6d4"/>
-      <stop offset="1" stop-color="#7c3aed"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
-  <path d="M20 14h16l10 10v22a4 4 0 0 1-4 4H20a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4Z" fill="#ffffff" fill-opacity="0.95"/>
-  <path d="M36 14v8a2 2 0 0 0 2 2h8" fill="none" stroke="#7c3aed" stroke-opacity="0.35" stroke-width="2.5" stroke-linejoin="round"/>
-  <circle cx="30" cy="35" r="6.5" fill="none" stroke="#7c3aed" stroke-width="3.5"/>
-  <path d="m35 40 5 5" stroke="#7c3aed" stroke-width="3.5" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <rect width="16" height="16" fill="#0F0A1A"/>
+  <g fill="#00D9FF">
+    <rect x="4" y="2" width="4" height="1"/>
+    <rect x="3" y="3" width="1" height="1"/>
+    <rect x="8" y="3" width="1" height="1"/>
+    <rect x="2" y="4" width="1" height="4"/>
+    <rect x="9" y="4" width="1" height="4"/>
+    <rect x="3" y="8" width="1" height="1"/>
+    <rect x="8" y="8" width="1" height="1"/>
+    <rect x="4" y="9" width="4" height="1"/>
+  </g>
+  <rect x="4" y="4" width="2" height="1" fill="#F07AD9"/>
+  <g fill="#FFCC59">
+    <rect x="9" y="9" width="2" height="2"/>
+    <rect x="11" y="11" width="2" height="2"/>
+    <rect x="13" y="13" width="1" height="1"/>
+  </g>
 </svg>

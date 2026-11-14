@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="320" viewBox="0 0 420 320">
+  <!-- Pistas de circuito para el interior de las cartas (se usa como máscara) -->
+  <g fill="none" stroke="#000" stroke-width="2">
+    <path d="M60 0 V70 H24"/>
+    <path d="M150 0 V36"/>
+    <path d="M300 0 V54 H360 V90"/>
+    <path d="M396 120 H350 V170"/>
+    <path d="M0 210 H40 V260"/>
+    <path d="M110 320 V270 H170 V250"/>
+    <path d="M250 320 V284 H300"/>
+    <path d="M380 320 V250 H420"/>
+  </g>
+  <g fill="#000">
+    <rect x="21" y="67" width="6" height="6"/>
+    <rect x="147" y="33" width="6" height="6"/>
+    <rect x="357" y="87" width="6" height="6"/>
+    <rect x="347" y="167" width="6" height="6"/>
+    <rect x="37" y="257" width="6" height="6"/>
+    <rect x="167" y="247" width="6" height="6"/>
+    <rect x="297" y="281" width="6" height="6"/>
+  </g>
+</svg>

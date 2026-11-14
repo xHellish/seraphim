@@ -27,12 +27,19 @@ Navegador  ->  :PORT | server.js (Node)  ->  127.0.0.1:8080 SearXNG    | ->  Bra
 - **Render**: `render.yaml` define un servicio web gratuito con Docker, health check en `/healthz` y `SEARXNG_SECRET` generado por Render.
 - **Recursos medidos**: unos 140 MB de RAM con el contenedor limitado a 512 MB; SearXNG tarda unos 3 s en arrancar; una búsqueda con verificación tarda entre 7 y 13 s.
 
-- **Frontend** (`src/`): HTML, CSS y JavaScript sin frameworks. Pinta los resultados con `createElement` y `textContent`, así que los títulos y fragmentos de páginas externas no pueden inyectar código. `innerHTML` solo se usa para los iconos SVG, que son constantes del propio código.
-  - **Dos vistas**: portada con la barra centrada (`body.is-home`) y vista de resultados con barra superior fija (`body.is-results`). Es el mismo DOM; cambia solo la clase del `body`.
-  - **Búsqueda en la URL**: `?q=...` se guarda con `history.pushState`, así que se puede compartir el enlace y funcionan Atrás y Adelante (`popstate`).
-  - **Tema**: claro u oscuro según `prefers-color-scheme`, con un botón que fija `data-theme` en `<html>` y lo guarda en `localStorage`. Un script en `<head>` lo aplica antes de pintar para evitar parpadeos.
-  - **Colores**: variables CSS en `:root`, con cian y violeta como acentos.
-  - **Detalles**: esqueleto de carga, el atajo `/` enfoca la barra, y se ignoran las respuestas de búsquedas anteriores (`search_id`).
+- **Frontend** (`src/`): HTML, CSS y JavaScript sin frameworks. Pinta los resultados con `createElement` y `textContent`, así que los títulos y fragmentos de páginas externas no pueden inyectar código. No usa `innerHTML`.
+  - **Estilo AXM**: es el kit del portafolio (`axm-web-style`), basado en la UI del juego AGI x Machina: pixel art, fondo de placa de circuitos, cartas con marco en escalón, ventanas con corchetes y terminales CRT. Sus archivos se copiaron sin modificar a `css/axm.css`, `js/axm.js` y `assets/` (fuente, fondos y cursores).
+  - **Estilos propios**: `styles/main.css` solo añade lo que el kit no trae (barra de búsqueda, resultados y el layout centrado). Para actualizar el kit basta con reemplazar los tres archivos de arriba.
+  - **Sin barra lateral**: la página es una sola columna centrada. Como el kit reserva el espacio de `.ax_sidebar` en `.ax_main`, `main.css` lo anula (`margin-left: 0`). `axm.js` no necesita botones de navegación: si no hay `data-section`, su navegación no hace nada.
+  - **Dos vistas dentro de Search**: portada (logo, barra y sugerencias) y resultados (título RESULTS, terminal de estado y cartas). Es el mismo DOM; cambia solo la clase del `body` (`is_home` o `is_results`).
+  - **Terminal de estado**: una terminal CRT muestra el progreso de cada búsqueda (`> search "..."`, `found`, `time`, `(cache)`, motores caídos y errores).
+  - **Resultados**: cada uno es una carta con marco de color. El color se elige con un hash del dominio, así que un mismo sitio siempre tiene el mismo marco. La acción principal (Download) va en dorado y la secundaria (Open) en violeta.
+  - **Partículas y glitch**: `axm.js` solo conecta los elementos que existen al cargar, así que `app.js` conecta las partículas a cada carta nueva (`attach_particles`). El glitch suena una vez, al pasar de la portada a los resultados.
+  - **Búsqueda en la URL**: `?q=...` se guarda con `history.pushState`, así que se puede compartir el enlace y funcionan Atrás y Adelante (`popstate`). El enlace "< home" de la vista de resultados vuelve a la portada.
+  - **Detalles**: el atajo `/` enfoca la barra y se ignoran las respuestas de búsquedas anteriores (`search_id`).
+  - **Solo oscuro**: el kit no tiene tema claro, así que no hay interruptor de tema.
+  - **Trampas de BitPap**: la V mayúscula se lee como U, por eso el logo se escribe "Seraphim vision". El 0 se confunde con el 8 a tamaño de texto; como los resultados traen años, versiones y tamaños, `main.css` toma solo el carácter 0 de una fuente del sistema (`@font-face` con `unicode-range: U+0030`) en `.sv_result` y `.sv_status`. Si no hay ninguna instalada, se ve el 0 de BitPap.
+  - **Caché del navegador**: subir el número de `?v=` en `index.html` cada vez que cambie un CSS o JS.
 - **Servidor** (`server.js`): usa solo la librería estándar de Node (`http`, `fs`, `dns`, `fetch`). Sirve los archivos estáticos y expone dos endpoints.
 - **SearXNG**: metabuscador de código abierto que se aloja aparte. Se configura con `searxng/settings.yml`, que activa la salida JSON.
 
@@ -127,13 +134,21 @@ El límite por IP usa el primer valor de `X-Forwarded-For`. Un cliente puede fal
 
 ## Decision Log
 
-### 2026-11-14 - Rediseño moderno y minimalista
+### 2026-11-14 - Estilo AXM del portafolio
 
-- **Estilo**: buscador minimalista; la portada tiene logo, barra y sugerencias centradas, y al buscar la barra pasa a una cabecera fija con los resultados en lista.
-- **Tema automático** claro u oscuro, con botón para elegirlo manualmente.
-- **Colores**: se mantienen cian y violeta, ahora como acentos sutiles (degradado del logo, enlaces, insignia "PDF"), sin brillos de neón.
-- **Tipografía**: Inter (Google Fonts) en lugar de Roboto.
-- **Logo**: nuevo SVG cuadrado (documento con lupa) que también funciona como favicon.
+- Se reemplazó el rediseño minimalista claro y oscuro por el estilo AXM, el mismo del portafolio de Ben Farz. Así la web comparte identidad visual con el resto de sus proyectos.
+- **El kit se usa sin modificar** (`axm.css`, `axm.js`, `assets/`). Lo propio del buscador vive en `styles/main.css` y `scripts/app.js`.
+- **Se quitó el tema claro** y la fuente Inter: el estilo es solo oscuro y usa BitPap para todo.
+- **Estado de la búsqueda en una terminal CRT** en lugar de un texto suelto o un esqueleto de carga; el cursor parpadeante indica que está trabajando.
+- **Logo "Seraphim vision"** con v minúscula, porque BitPap dibuja la V mayúscula como U. El título de la pestaña del navegador sí usa "Seraphim Vision".
+- **Dígito 0 desde una fuente del sistema** en los resultados y la terminal (ver el apartado del frontend). Es la única desviación de "BitPap para todo".
+- **Pendiente: licencia de BitPap.** El kit avisa que la fuente no traía archivo de licencia y que hay que revisarla antes de publicarla en sitios nuevos. La fuente ya se sirve desde este repo.
+- **Logo SVG** nuevo en pixel art (lupa cian con mango dorado), usado como favicon.
+- **Sin menú lateral ni sección About.** Se prefirió la estructura de buscador centrado: la portada queda en el centro de la pantalla y los resultados siguen en una columna centrada. Para volver a la portada hay un enlace "< home" sobre el título de los resultados. El glitch del logo suena al entrar a la portada.
+
+### 2026-11-14 - Rediseño minimalista (reemplazado por el estilo AXM)
+
+- Portada centrada, barra fija al buscar, tema claro u oscuro automático, tipografía Inter y logo de documento con lupa. Sustituido el mismo día por el estilo AXM.
 
 ### 2026-11-14 - Caché en memoria para búsquedas y verificaciones
 

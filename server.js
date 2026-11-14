@@ -67,6 +67,7 @@ const MIME_TYPES = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".ico": "image/x-icon",
+  ".ttf": "font/ttf",
 };
 
 // =============================================
