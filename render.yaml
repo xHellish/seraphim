@@ -3,7 +3,7 @@
 # ---------------------------------------------
 services:
   - type: web
-    name: seraphim
+    name: seraphim-vision
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile

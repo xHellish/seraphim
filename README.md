@@ -26,11 +26,11 @@ Free services sleep after about 15 minutes without traffic; the first request af
 ## Run locally with Docker
 
 ```bash
-docker build -t seraphim .
+docker build -t seraphim-vision .
 ```
 
 ```bash
-docker run --rm -p 127.0.0.1:10000:10000 -e SEARXNG_SECRET=change-me-to-a-long-random-string seraphim
+docker run --rm -p 127.0.0.1:10000:10000 -e SEARXNG_SECRET=change-me-to-a-long-random-string seraphim-vision
 ```
 
 Open `http://localhost:10000`.
