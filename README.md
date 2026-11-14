@@ -13,6 +13,8 @@ Results come from [SearXNG](https://github.com/searxng/searxng), a free, open so
 - Warning when a search engine is blocked (for example by a CAPTCHA)
 - In-memory cache: repeated searches answer instantly and known PDFs are not re-checked
 - Per-IP rate limiting and a download size limit
+- Clean, minimal design with automatic light and dark themes
+- Shareable search URLs (`/?q=...`) with working back and forward navigation
 - Responsive design
 
 ## Deploy on Render (free)

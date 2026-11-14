@@ -27,7 +27,12 @@ Navegador  ->  :PORT | server.js (Node)  ->  127.0.0.1:8080 SearXNG    | ->  Bra
 - **Render**: `render.yaml` define un servicio web gratuito con Docker, health check en `/healthz` y `SEARXNG_SECRET` generado por Render.
 - **Recursos medidos**: unos 140 MB de RAM con el contenedor limitado a 512 MB; SearXNG tarda unos 3 s en arrancar; una búsqueda con verificación tarda entre 7 y 13 s.
 
-- **Frontend** (`src/`): HTML, CSS y JavaScript sin frameworks. Pinta los resultados con `createElement` y `textContent` (nunca `innerHTML`), así que los títulos y fragmentos de páginas externas no pueden inyectar código.
+- **Frontend** (`src/`): HTML, CSS y JavaScript sin frameworks. Pinta los resultados con `createElement` y `textContent`, así que los títulos y fragmentos de páginas externas no pueden inyectar código. `innerHTML` solo se usa para los iconos SVG, que son constantes del propio código.
+  - **Dos vistas**: portada con la barra centrada (`body.is-home`) y vista de resultados con barra superior fija (`body.is-results`). Es el mismo DOM; cambia solo la clase del `body`.
+  - **Búsqueda en la URL**: `?q=...` se guarda con `history.pushState`, así que se puede compartir el enlace y funcionan Atrás y Adelante (`popstate`).
+  - **Tema**: claro u oscuro según `prefers-color-scheme`, con un botón que fija `data-theme` en `<html>` y lo guarda en `localStorage`. Un script en `<head>` lo aplica antes de pintar para evitar parpadeos.
+  - **Colores**: variables CSS en `:root`, con cian y violeta como acentos.
+  - **Detalles**: esqueleto de carga, el atajo `/` enfoca la barra, y se ignoran las respuestas de búsquedas anteriores (`search_id`).
 - **Servidor** (`server.js`): usa solo la librería estándar de Node (`http`, `fs`, `dns`, `fetch`). Sirve los archivos estáticos y expone dos endpoints.
 - **SearXNG**: metabuscador de código abierto que se aloja aparte. Se configura con `searxng/settings.yml`, que activa la salida JSON.
 
@@ -121,6 +126,14 @@ El límite por IP usa el primer valor de `X-Forwarded-For`. Un cliente puede fal
 - **Bloqueos de bots**: algunos sitios bloquean peticiones que no vienen de un navegador; esos PDFs se descartan aunque existan.
 
 ## Decision Log
+
+### 2026-11-14 - Rediseño moderno y minimalista
+
+- **Estilo**: buscador minimalista; la portada tiene logo, barra y sugerencias centradas, y al buscar la barra pasa a una cabecera fija con los resultados en lista.
+- **Tema automático** claro u oscuro, con botón para elegirlo manualmente.
+- **Colores**: se mantienen cian y violeta, ahora como acentos sutiles (degradado del logo, enlaces, insignia "PDF"), sin brillos de neón.
+- **Tipografía**: Inter (Google Fonts) en lugar de Roboto.
+- **Logo**: nuevo SVG cuadrado (documento con lupa) que también funciona como favicon.
 
 ### 2026-11-14 - Caché en memoria para búsquedas y verificaciones
 
