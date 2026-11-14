@@ -220,9 +220,26 @@ body.is_searching .sv_search_frame {
 }
 
 /* Tarjetas fantasma con el mismo marco y pistas que las reales */
+/* Mismo reparto que una carta real: hueco de miniatura y líneas de texto */
 .sv_ghost .ax_card_face {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+
+.sv_ghost_thumb {
+    display: block;
+    width: 150px;
+    aspect-ratio: 3 / 4;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    animation: sv_ghost_pulse 1.2s steps(6) infinite;
+}
+
+.sv_ghost_lines {
+    display: flex;
+    flex-direction: column;
     gap: 14px;
-    min-height: 168px;
 }
 
 .sv_ghost_bar {
@@ -277,6 +294,8 @@ body.is_searching .sv_search_frame {
 @media (prefers-reduced-motion: reduce) {
     body.is_searching .sv_search_frame,
     .sv_ghost_bar,
+    .sv_ghost_thumb,
+    .sv_thumb_state.is_waiting,
     .sv_result {
         animation: none;
     }
@@ -347,93 +366,59 @@ body.is_searching .sv_search_frame {
 }
 
 /* =============================================
-   Ventana de preview
+   Miniatura de la primera página
    --------------------------------------------- */
-.sv_modal {
-    position: fixed;
-    inset: 0;
-    z-index: 2000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
+/* Miniatura a la izquierda y datos a la derecha */
+.sv_result .ax_card_face {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
 }
 
-.sv_modal_backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 2, 6, 0.86);
-}
-
-body.has_modal {
-    overflow: hidden;
-}
-
-.sv_modal_window {
-    position: relative;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    width: min(1000px, 100%);
-    height: min(92vh, 940px);
-}
-
-.sv_preview_crt {
-    flex: 1;
-    min-height: 0;
-}
-
-.sv_preview_crt .ax_crt_screen {
-    min-height: 0;
-}
-
-/* El título es el nombre del archivo: puede ser largo */
-.sv_preview_crt .ax_crt_bar span:first-child {
+.sv_result_main {
     min-width: 0;
+}
+
+/* Recuadro con marco en escalón del color de la carta; es un enlace al PDF */
+.sv_thumb {
+    width: 150px;
+}
+
+.sv_thumb_face {
+    display: grid;
+    place-items: center;
+    height: auto;
+    aspect-ratio: 3 / 4;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    background-color: #0b0e17;
 }
 
-.sv_preview_body {
-    position: relative;
-    flex: 1;
-    min-height: 0;
+/* La marca "...." del kit taparía la página */
+.sv_thumb .ax_face::after {
+    display: none;
 }
 
-/* El visor va por encima de las líneas de escaneo del monitor para que el texto se lea nítido */
-.sv_preview_frame {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
+/* Páginas apaisadas o muy altas se ven completas, sin recortar */
+.sv_thumb_face canvas {
+    display: block;
     width: 100%;
     height: 100%;
-    border: 0;
-    background: #1c1f29;
+    object-fit: contain;
 }
 
-/* El log tapa el visor mientras se descarga el PDF y se oculta al terminar;
-   lleva sus propias líneas de escaneo porque queda por encima de las del monitor */
-.sv_preview_log {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    overflow: hidden;
-    background:
-        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.10) 0 1px, transparent 1px 4px),
-        radial-gradient(ellipse at 50% 45%, #0b1622 0%, #060b12 70%, #03060b 100%);
+.sv_thumb_state {
+    font-size: 1.15rem;
+    letter-spacing: 1px;
+    color: var(--text_muted);
 }
 
-.sv_preview_log p {
-    overflow-wrap: anywhere;
+.sv_thumb_state.is_waiting {
+    animation: sv_ghost_pulse 1.2s steps(6) infinite;
 }
 
-.sv_modal_actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 12px;
+.sv_thumb_state.is_failed {
+    color: var(--term_warn);
 }
 
 /* =============================================
@@ -455,15 +440,6 @@ body.has_modal {
         padding: 28px 16px 24px;
     }
 
-    /* La preview ocupa toda la pantalla en móvil */
-    .sv_modal {
-        padding: 0;
-    }
-
-    .sv_modal_window {
-        height: 100%;
-    }
-
     .sv_result_title {
         font-size: 1.7rem;
     }
@@ -479,5 +455,18 @@ body.has_modal {
 
     #search-input {
         font-size: 1.35rem;
+    }
+}
+
+/* En pantallas angostas la miniatura pasa arriba de los datos */
+@media (max-width: 640px) {
+    .sv_result .ax_card_face,
+    .sv_ghost .ax_card_face {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .sv_thumb,
+    .sv_ghost_thumb {
+        width: 128px;
     }
 }

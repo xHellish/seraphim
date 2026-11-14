@@ -34,8 +34,13 @@ Navegador  ->  :PORT | server.js (Node)  ->  127.0.0.1:8080 SearXNG    | ->  Bra
   - **Dos vistas dentro de Search**: portada (logo, barra y sugerencias) y resultados (título RESULTS, terminal de estado y cartas). Es el mismo DOM; cambia solo la clase del `body` (`is_home` o `is_results`).
   - **Terminal de estado**: una terminal CRT de altura fija que escribe un log y baja sola, como una terminal real: `> search "..."`, `found`, `time`, `(cache)`, motores caídos y errores. Las líneas del resumen se agregan al mismo log; "Load more" lo continúa y una búsqueda nueva lo limpia.
   - **Animación de espera** (`start_progress` en `app.js`): mientras llega la respuesta, el log escribe una etapa cada 450 ms (conectar, consultar cada motor, unir resultados, verificar enlaces) y una barra de escaneo `[..####....]` va y viene. Si el servidor tarda más que las etapas, aparece `waiting for slow engines`. El servidor no emite progreso real: las etapas reflejan lo que hace pero son temporizadas, y la lista de motores está duplicada en `SEARCH_ENGINES` (`app.js`) y `ENGINE_GROUPS` (`server.js`).
-  - **Preview de PDFs**: cada carta tiene un botón "Preview" (cian) que abre una ventana CRT con el visor nativo del navegador. `app.js` descarga el PDF por `/api/preview` leyendo el cuerpo por partes, así que el log de la ventana muestra el avance real (`downloading: 1.2 MB / 3.4 MB [####....]`), y luego lo muestra en un `iframe` con un `blob:`. El botón Download de la ventana usa ese mismo PDF en memoria, sin pedirlo otra vez. Se cierra con Close, Escape o un clic en el fondo; mientras está abierta, el resto de la página queda `inert` y el foco vuelve al botón que la abrió. Si el servidor falla, el log muestra el error y deja "Open" como salida.
-  - **Sin preview en celulares**: si `navigator.pdfViewerEnabled` es falso (Chrome Android, iPhone), el botón no se muestra y queda solo "Open". En móvil la ventana ocupa toda la pantalla.
+  - **Miniatura de la primera página** (`scripts/thumbnails.js`): cada carta tiene a la izquierda un recuadro con el marco en escalón del color de la carta (en móvil pasa arriba de los datos). Es un enlace al PDF original. La imagen la dibuja pdf.js en el navegador del visitante:
+    - **Carga diferida**: un `IntersectionObserver` la pide cuando la carta está a 300 px de la pantalla, con un máximo de 3 a la vez. Las cartas que nunca se ven no gastan tráfico. Un salto de scroll que pasa de largo una carta tampoco la pide. Al empezar otra búsqueda se vacía la cola (`clear_thumbnails`).
+    - **Solo los trozos necesarios**: pdf.js se alimenta con un `PDFDataRangeTransport` propio que pide trozos de 64 KB a `/api/pdf`. Con `disableAutoFetch` no baja el resto del archivo. En las pruebas, un PDF de 2,1 MB gastó unos 750 KB (35 %) y uno de 757 KB gastó unos 310 KB (41 %).
+    - **Un solo worker** de pdf.js compartido, y pdf.js se importa la primera vez que hace falta (no se baja si no hay miniaturas).
+    - **Estados**: `pdf` parpadeando mientras espera y `no preview` en naranja si falla (archivo cifrado, origen que no soporta rangos y es muy grande, error del servidor o más de 25 s). Un fallo no afecta a las demás.
+    - **Fuentes y mapas de caracteres**: no se incluyen los `cMap` ni las fuentes estándar de pdf.js, así que algunos PDFs con fuentes no incrustadas o con texto CJK pueden verse con letras faltantes.
+  - **pdf.js** (`src/vendor/pdfjs/`): versión 6.5.438 (Apache 2.0), tomada del paquete `pdfjs-dist` de npm tras verificar su sha512 contra el registro. Solo se copiaron `pdf.min.mjs`, `pdf.worker.min.mjs` y `LICENSE` (1,7 MB). No es una dependencia de npm: para actualizarla hay que reemplazar esos archivos a mano. El servidor debe servir `.mjs` como `text/javascript`.
   - **Tarjetas fantasma**: en la primera página, tres cartas vacías con el mismo marco y pistas ocupan el lugar de los resultados y pulsan en pasos (`steps()`). El marco de la barra de búsqueda late y el botón pasa a "Scanning" (`body.is_searching`).
   - **Aparición de resultados**: cada carta hace un parpadeo de píxel de opacidad (`sv_reveal`) con un retraso escalonado de 90 ms, hasta 8 pasos. Solo se mueve la opacidad, nada cambia de tamaño ni de lugar.
   - **Menos movimiento**: con `prefers-reduced-motion` no hay pulsos ni parpadeos, y la barra de escaneo queda quieta.
@@ -47,7 +52,7 @@ Navegador  ->  :PORT | server.js (Node)  ->  127.0.0.1:8080 SearXNG    | ->  Bra
   - **Trampas de BitPap**: la V mayúscula se lee como U, por eso el logo se escribe "Seraphim vision". El 0 se confunde con el 8 a tamaño de texto; como los resultados traen años, versiones y tamaños, `main.css` toma solo el carácter 0 de una fuente del sistema (`@font-face` con `unicode-range: U+0030`) en `.sv_result` y `.sv_status`. Si no hay ninguna instalada, se ve el 0 de BitPap.
   - **Etiqueta bajo el monitor** (`.ax_crt_label`): en el kit mide 22.8 px de alto sobre una banda de 26 px, así que su parte superior se solapa unos 4 px con el borde de la pantalla y puede verse cortada. `main.css` le da una banda de 38 px, `line-height: 1` y `font-size: 1.1rem` (el mínimo de BitPap), con 9 px libres arriba y abajo. El mismo defecto existe en el kit y en el portafolio.
   - **Caché del navegador**: subir el número de `?v=` en `index.html` cada vez que cambie un CSS o JS.
-- **Servidor** (`server.js`): usa solo la librería estándar de Node (`http`, `fs`, `dns`, `fetch`). Sirve los archivos estáticos y expone `/api/search`, `/api/download`, `/api/preview` y `/healthz`.
+- **Servidor** (`server.js`): usa solo la librería estándar de Node (`http`, `fs`, `dns`, `fetch`). Sirve los archivos estáticos y expone `/api/search`, `/api/download`, `/api/pdf` y `/healthz`.
 - **SearXNG**: metabuscador de código abierto que se aloja aparte. Se configura con `searxng/settings.yml`, que activa la salida JSON.
 
 ## Endpoints
@@ -101,14 +106,20 @@ El servidor guarda en memoria dos tipos de datos:
 - **Expiración**: al llenarse, se descarta la entrada usada hace más tiempo (un `Map` reordenado en cada lectura).
 - **Sin persistencia**: la caché se pierde cuando el proceso se reinicia o Render duerme el servicio. `SEARCH_CACHE_TTL_MINUTES=0` desactiva la caché de búsquedas.
 
-### `GET /api/download?url=<url>` y `GET /api/preview?url=<url>`
+### `GET /api/download?url=<url>`
 
-Descargan el PDF desde el origen y lo reenvían desde nuestro dominio. Comparten la misma función (`handle_download`); solo cambian el `Content-Disposition` (`attachment` o `inline`) y el límite por IP.
+Descarga el PDF completo desde el origen y lo reenvía con `Content-Disposition: attachment`. Hace falta porque el atributo `download` de HTML no funciona con URLs de otro dominio. Antes de enviar nada, comprueba la firma `%PDF-`, y aplica las protecciones contra SSRF y el tope de tamaño (`MAX_DOWNLOAD_BYTES`).
 
-- **Descarga**: hace falta porque el atributo `download` de HTML no funciona con URLs de otro dominio.
-- **Preview**: hace falta porque muchos sitios bloquean ser incrustados en un `iframe` (`X-Frame-Options`). Al servir el PDF desde nuestro origen, el visor del navegador puede mostrarlo.
-- Antes de enviar nada, comprueban la firma `%PDF-` y aplican las mismas protecciones contra SSRF y el tope de tamaño (`MAX_DOWNLOAD_BYTES`). Responden con `X-Content-Type-Options: nosniff`.
-- Cada resultado de `/api/search` trae `previewable`: falso si el PDF supera el tope, para no ofrecer un botón que fallaría.
+### `GET /api/pdf?url=<url>` con `Range: bytes=inicio-fin`
+
+Reenvía solo un trozo del PDF, siempre como `206 Partial Content`. Lo usan las miniaturas para que pdf.js lea la primera página sin bajar el archivo entero.
+
+- **Solo rangos acotados** de hasta 4 MB (`RANGE_MAX_BYTES`). Sin `Range`, con un rango sin fin (`bytes=0-`) o demasiado grande responde 400: un archivo entero se pide por `/api/download`, con su límite más estricto.
+- **Verificación**: antes de reenviar comprueba, con la misma caché de `verify_pdf_cached` que usa la búsqueda, que la URL es un PDF. Los trozos intermedios no traen la firma, por eso no se puede comprobar por el contenido.
+- **Origen sin soporte de rangos**: si responde 200 con el archivo entero, el servidor lo recorta, pero solo si cabe en el tope de 50 MB; si no, responde 413.
+- **Sin tope de tamaño por archivo**: un PDF enorme puede tener miniatura porque solo se lee un trozo. Recorta el final si el rango pasa del tamaño del archivo.
+- Responde con `Accept-Ranges: bytes`, `X-Content-Type-Options: nosniff` y `Cache-Control: private, max-age=3600`, así que el navegador no repite los trozos al volver a ver los resultados.
+- Su límite por IP (`THUMBNAIL_LIMIT_PER_MINUTE`) es alto porque pdf.js pide varios trozos por miniatura.
 
 ## Seguridad
 
@@ -132,7 +143,7 @@ Descargan el PDF desde el origen y lo reenvían desde nuestro dominio. Comparten
 | `TRUST_PROXY` | `false` (`true` en Docker) | Toma la IP del cliente de `X-Forwarded-For` |
 | `SEARCH_LIMIT_PER_MINUTE` | `20` | Búsquedas por IP y minuto |
 | `DOWNLOAD_LIMIT_PER_MINUTE` | `10` | Descargas por IP y minuto |
-| `PREVIEW_LIMIT_PER_MINUTE` | `20` | Previews por IP y minuto |
+| `THUMBNAIL_LIMIT_PER_MINUTE` | `600` | Trozos de `/api/pdf` por IP y minuto (cada miniatura pide varios) |
 | `MAX_DOWNLOAD_BYTES` | `52428800` (50 MB) | Tamaño máximo que reenvía `/api/download` |
 | `SEARCH_CACHE_TTL_MINUTES` | `60` | Duración de la caché de búsquedas; `0` la desactiva |
 | `SEARXNG_SECRET` | sin valor por defecto | Clave de SearXNG; el contenedor no arranca sin ella |
@@ -147,14 +158,17 @@ El límite por IP usa el primer valor de `X-Forwarded-For`. Un cliente puede fal
 
 ## Decision Log
 
-### 2026-11-14 - Preview de PDFs con el visor del navegador
+### 2026-11-14 - Miniatura de la primera página en lugar del visor
 
-- **Visor nativo del navegador en una ventana CRT**, elegido sobre una miniatura de la primera página. Las miniaturas obligan a agregar pdf.js y a bajar parte de cada PDF por cada resultado, lo que pesa en el plan gratuito de Render. El visor no agrega dependencias.
-- **Descargado completo como `blob:` en vez de pasar la URL del servidor al `iframe`**: permite mostrar el avance real y los errores del servidor (un `iframe` solo muestra el JSON de error), y evita implementar peticiones `Range` en el servidor. A cambio, el PDF debe bajarse entero antes de verse (tope de 50 MB) y el visor de Chrome muestra el nombre interno del `blob:` en su barra.
-- **Endpoint propio `/api/preview`** con su límite por IP, para que ver previews no consuma las descargas.
-- **Reenviar por nuestro servidor** es lo que permite previsualizar sitios que prohíben ser incrustados. Cada preview gasta tráfico del plan gratuito.
-- **Pendiente**: el visor de PDF solo se probó en el navegador del panel de pruebas (Chromium). Falta revisarlo en Firefox y Safari.
-- **Dos detalles del kit**: `.ax_window` no usa `box-sizing: border-box` (suma su relleno al alto), y las líneas de escaneo del monitor van encima del contenido, así que el visor queda por encima de ellas.
+- **Se quitó la ventana de preview** (visor nativo del navegador dentro de una ventana CRT, con `/api/preview`) y se reemplazó por una miniatura de la primera página en cada resultado. Se había elegido el visor por no agregar dependencias; después se prefirió ver el contenido de un vistazo, sin abrir nada.
+- **Dibujada en el navegador con pdf.js**, elegido sobre dibujarla en el servidor: el servidor tendría que instalar poppler (la imagen de SearXNG no trae gestor de paquetes) y el plan gratuito tiene 0,1 CPU, muy poco para 20 miniaturas por búsqueda.
+- **pdf.js copiado al repo** en lugar de cargarse desde un CDN: no depende de un tercero en producción, no le envía la IP de cada visitante a otro servicio y la versión queda fija. Cuesta 1,7 MB en el repo y actualizarlo es manual.
+- **Carga diferida**: las miniaturas solo se piden cuando la carta se acerca a la pantalla.
+- **Rangos en el servidor** (`/api/pdf`): sin ellos habría que bajar cada PDF completo para leer una página. Con rangos se gasta un 35 % a 41 % del archivo en los PDFs de prueba. Sigue siendo tráfico del plan gratuito de Render: una búsqueda con 10 a 20 miniaturas visibles puede mover varios MB.
+- **Alimentar pdf.js con un transporte propio** (`PDFDataRangeTransport`) en vez de darle la URL: así todas las peticiones llevan `Range` acotado y se pueden limitar. La petición inicial de pdf.js sin `Range` habría obligado a aceptar descargas completas o a truncarlas.
+- **Quedó sin aplicar** la marca `previewable` de los resultados (tope de tamaño): con rangos un PDF enorme también puede tener miniatura.
+- **Pendiente**: probar en Firefox y Safari, y en un celular real; solo se probó en Chromium del panel de pruebas, con emulación móvil.
+- **Dos detalles del kit** que se conservan: `.ax_window` no usa `box-sizing: border-box`, y las líneas de escaneo del monitor van encima del contenido.
 
 ### 2026-11-14 - Búsqueda con sensación de actividad
 

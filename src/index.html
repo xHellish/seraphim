@@ -12,7 +12,7 @@
     <!-- Fuente pixel precargada y estilo AXM -->
     <link rel="preload" href="assets/fonts/BitPap.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="stylesheet" href="css/axm.css?v=1">
-    <link rel="stylesheet" href="styles/main.css?v=9">
+    <link rel="stylesheet" href="styles/main.css?v=10">
 </head>
 
 <body class="is_home">
@@ -90,21 +90,30 @@
                     <li>
                         <div class="ax_frame ax_card sv_ghost" style="--accent: var(--cyan);">
                             <div class="ax_face ax_traces ax_card_face">
-                                <span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span>
+                                <span class="sv_ghost_thumb"></span>
+                                <div class="sv_ghost_lines">
+                                    <span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span>
+                                </div>
                             </div>
                         </div>
                     </li>
                     <li>
                         <div class="ax_frame ax_card sv_ghost" style="--accent: var(--violet);">
                             <div class="ax_face ax_traces ax_card_face">
-                                <span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span>
+                                <span class="sv_ghost_thumb"></span>
+                                <div class="sv_ghost_lines">
+                                    <span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span>
+                                </div>
                             </div>
                         </div>
                     </li>
                     <li>
                         <div class="ax_frame ax_card sv_ghost" style="--accent: var(--green);">
                             <div class="ax_face ax_traces ax_card_face">
-                                <span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span>
+                                <span class="sv_ghost_thumb"></span>
+                                <div class="sv_ghost_lines">
+                                    <span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span>
+                                </div>
                             </div>
                         </div>
                     </li>
@@ -123,43 +132,8 @@
         </footer>
     </main>
 
-    <!-- =============================================
-         Ventana de preview del PDF (visor nativo del navegador)
-         --------------------------------------------- -->
-    <div id="preview-modal" class="sv_modal" role="dialog" aria-modal="true" aria-labelledby="preview-title" hidden>
-        <div class="sv_modal_backdrop"></div>
-        <div class="ax_window sv_modal_window" style="--accent: var(--cyan);">
-            <div class="ax_crt sv_preview_crt">
-                <div class="ax_crt_screen">
-                    <div class="ax_crt_bar">
-                        <span id="preview-title">document.pdf :: preview</span>
-                        <span class="ax_window_dots" aria-hidden="true"><i></i><i></i><i></i></span>
-                    </div>
-                    <div class="sv_preview_body">
-                        <iframe id="preview-frame" class="sv_preview_frame" title="PDF preview" src="about:blank"></iframe>
-                        <div id="preview-log" class="ax_crt_body sv_preview_log" aria-live="polite"></div>
-                    </div>
-                </div>
-                <span class="ax_crt_label">READER</span>
-            </div>
-            <div class="sv_modal_actions">
-                <a id="preview-open" class="ax_frame ax_button ax_button_small" style="--accent: var(--violet);"
-                    href="#" target="_blank" rel="noopener noreferrer">
-                    <span class="ax_face"><span>Open</span></span>
-                </a>
-                <a id="preview-download" class="ax_frame ax_button ax_button_small" style="--accent: var(--gold_button);"
-                    href="#" download hidden>
-                    <span class="ax_face"><span>Download</span></span>
-                </a>
-                <button id="preview-close" class="ax_frame ax_button ax_button_small" type="button" style="--accent: var(--red);">
-                    <span class="ax_face"><span>Close</span></span>
-                </button>
-            </div>
-        </div>
-    </div>
-
     <script src="js/axm.js?v=1"></script>
-    <script type="module" src="scripts/app.js?v=4"></script>
+    <script type="module" src="scripts/app.js?v=5"></script>
 </body>
 
 </html>

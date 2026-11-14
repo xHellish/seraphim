@@ -30,7 +30,8 @@ const TRUST_PROXY = process.env.TRUST_PROXY === "true";
 const MAX_DOWNLOAD_BYTES = Number(process.env.MAX_DOWNLOAD_BYTES || String(50 * 1024 * 1024));
 const SEARCH_LIMIT_PER_MINUTE = Number(process.env.SEARCH_LIMIT_PER_MINUTE || "20");
 const DOWNLOAD_LIMIT_PER_MINUTE = Number(process.env.DOWNLOAD_LIMIT_PER_MINUTE || "10");
-const PREVIEW_LIMIT_PER_MINUTE = Number(process.env.PREVIEW_LIMIT_PER_MINUTE || "20");
+// pdf.js pide varios trozos de 64 KB por miniatura, así que este límite es mucho más alto
+const THUMBNAIL_LIMIT_PER_MINUTE = Number(process.env.THUMBNAIL_LIMIT_PER_MINUTE || "600");
 const RATE_LIMIT_WINDOW_MS = 60000;
 const SEARCH_CACHE_TTL_MINUTES = Number(process.env.SEARCH_CACHE_TTL_MINUTES || "60");
 
@@ -42,6 +43,8 @@ const SEARCH_TIMEOUT_MS = 20000;
 const VERIFY_TIMEOUT_MS = 6000;
 const DOWNLOAD_TIMEOUT_MS = 120000;
 const PDF_SNIFF_BYTES = 1024;
+// Tamaño máximo de un trozo que /api/pdf reenvía
+const RANGE_MAX_BYTES = 4 * 1024 * 1024;
 const USER_AGENT = "Mozilla/5.0 (compatible; SeraphimVision/1.0; PDF search)";
 
 // Grupos de motores y el operador de PDF que entiende cada uno
@@ -65,6 +68,7 @@ const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".ico": "image/x-icon",
@@ -531,8 +535,6 @@ async function run_pdf_search(clean_query, page) {
       snippet: candidate.content || "",
       engines: candidate.engines || [],
       size_bytes: verification.size_bytes,
-      // Falso si el PDF supera el tope que reenvía el servidor (preview y descarga)
-      previewable: verification.size_bytes === null || verification.size_bytes <= MAX_DOWNLOAD_BYTES,
     });
   }
 
@@ -631,8 +633,8 @@ function wait_for_drain(res) {
   });
 }
 
-// Reenvía un PDF de otro sitio; disposition es "attachment" (descarga) o "inline" (preview)
-async function handle_download(req, res, request_url, disposition) {
+// GET /api/download?url=... reenvía el PDF completo como adjunto
+async function handle_download(req, res, request_url) {
   // 1. Validar parámetro
   const target_url = request_url.searchParams.get("url");
   if (target_url === null || target_url === "") {
@@ -680,7 +682,7 @@ async function handle_download(req, res, request_url, disposition) {
   // 4. Enviar cabeceras y el contenido en streaming
   const response_headers = {
     "content-type": "application/pdf",
-    "content-disposition": `${disposition}; filename="${build_download_filename(final_url)}"`,
+    "content-disposition": `attachment; filename="${build_download_filename(final_url)}"`,
     // El archivo se sirve desde nuestro origen: nunca debe interpretarse como otro tipo
     "x-content-type-options": "nosniff",
     "cache-control": "no-store",
@@ -717,7 +719,145 @@ async function handle_download(req, res, request_url, disposition) {
     }
   }
   res.end();
-  log("info", `Forwarded (${disposition}) ${final_url}`);
+  log("info", `Downloaded ${final_url}`);
+}
+
+// Interpreta "bytes=inicio-fin" cuando está acotado y no es enorme; si no, devuelve null
+function parse_bounded_range(range_header) {
+  if (typeof range_header !== "string") {
+    return null;
+  }
+  const match = /^bytes=(\d+)-(\d+)$/.exec(range_header.trim());
+  if (match === null) {
+    return null;
+  }
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end < start || end - start + 1 > RANGE_MAX_BYTES) {
+    return null;
+  }
+  return { start, end };
+}
+
+// Interpreta "bytes inicio-fin/total" de una respuesta 206 del origen; total es null si no lo informa
+function parse_content_range(header_value) {
+  if (header_value === null) {
+    return null;
+  }
+  const match = /^bytes (\d+)-(\d+)\/(\d+|\*)$/.exec(header_value.trim());
+  if (match === null) {
+    return null;
+  }
+  let total = null;
+  if (match[3] !== "*") {
+    total = Number(match[3]);
+  }
+  return { first: Number(match[1]), last: Number(match[2]), total };
+}
+
+// GET /api/pdf?url=... con Range: reenvía solo un trozo del PDF, siempre como 206.
+// Lo usan las miniaturas: pdf.js lee la primera página sin bajar el archivo entero.
+async function handle_pdf_range(req, res, request_url, range) {
+  // 1. Validar parámetro y confirmar que la URL es un PDF (casi siempre sale de la caché)
+  const target_url = request_url.searchParams.get("url");
+  if (target_url === null || target_url === "") {
+    throw new HttpError(400, "Missing query parameter 'url'");
+  }
+  const verification = await verify_pdf_cached(target_url);
+  if (!verification.is_pdf) {
+    throw new HttpError(422, "The source did not return a PDF file");
+  }
+
+  // 2. Pedir el trozo al origen (validando cada redirección)
+  const { response } = await fetch_public(target_url, {
+    method: "GET",
+    headers: { "user-agent": USER_AGENT, range: `bytes=${range.start}-${range.end}` },
+    signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+  });
+  if (response.status === 416) {
+    await response.body.cancel();
+    throw new HttpError(416, "Requested range is outside the file");
+  }
+  if (!response.ok || response.body === null) {
+    if (response.body !== null) {
+      await response.body.cancel();
+    }
+    throw new HttpError(502, `Source responded with status ${response.status}`);
+  }
+
+  // 3. Averiguar qué bytes trae el cuerpo y el tamaño total del archivo
+  let total = null;
+  let body_first = 0;
+  let out_last = range.end;
+  if (response.status === 206) {
+    const origin_range = parse_content_range(response.headers.get("content-range"));
+    if (origin_range === null || origin_range.first !== range.start) {
+      await response.body.cancel();
+      throw new HttpError(502, "Source returned an unexpected byte range");
+    }
+    total = origin_range.total;
+    body_first = origin_range.first;
+    out_last = Math.min(range.end, origin_range.last);
+  } else {
+    // El origen ignoró el rango y manda el archivo entero: se recorta aquí si cabe en el tope
+    total = parse_size(response.headers.get("content-length"));
+    if (total === null || total > MAX_DOWNLOAD_BYTES) {
+      await response.body.cancel();
+      throw new HttpError(413, "The source does not support partial reads and the file is too large");
+    }
+    if (range.start >= total) {
+      await response.body.cancel();
+      throw new HttpError(416, "Requested range is outside the file");
+    }
+    out_last = Math.min(range.end, total - 1);
+  }
+
+  // 4. Enviar solo los bytes pedidos
+  const out_length = out_last - range.start + 1;
+  let total_text = "*";
+  if (total !== null) {
+    total_text = String(total);
+  }
+  res.writeHead(206, {
+    "content-type": "application/pdf",
+    "content-range": `bytes ${range.start}-${out_last}/${total_text}`,
+    "content-length": String(out_length),
+    "accept-ranges": "bytes",
+    "x-content-type-options": "nosniff",
+    "cache-control": "private, max-age=3600",
+  });
+  const reader = response.body.getReader();
+  req.on("close", () => {
+    if (!res.writableEnded) {
+      reader.cancel().catch((error) => {
+        log("warn", `Could not cancel source stream: ${error.message}`);
+      });
+    }
+  });
+
+  // Posición en el archivo del siguiente byte que llega del origen
+  let position = body_first;
+  let sent_bytes = 0;
+  while (sent_bytes < out_length) {
+    const { done, value } = await reader.read();
+    if (done) {
+      throw new Error(`Source ended before the requested range was complete: ${target_url}`);
+    }
+    const chunk_end = position + value.length;
+    const from = Math.max(range.start, position);
+    const to = Math.min(out_last + 1, chunk_end);
+    if (to > from) {
+      const piece = value.subarray(from - position, to - position);
+      sent_bytes += piece.length;
+      if (!res.write(piece)) {
+        await wait_for_drain(res);
+      }
+    }
+    position = chunk_end;
+  }
+  await reader.cancel();
+  res.end();
+  log("debug", `Range ${range.start}-${out_last} of ${target_url}`);
 }
 
 // Sirve archivos estáticos desde src/
@@ -770,12 +910,17 @@ async function handle_request(req, res) {
   }
   if (request_url.pathname === "/api/download") {
     enforce_rate_limit(req, "download", DOWNLOAD_LIMIT_PER_MINUTE);
-    await handle_download(req, res, request_url, "attachment");
+    await handle_download(req, res, request_url);
     return;
   }
-  if (request_url.pathname === "/api/preview") {
-    enforce_rate_limit(req, "preview", PREVIEW_LIMIT_PER_MINUTE);
-    await handle_download(req, res, request_url, "inline");
+  if (request_url.pathname === "/api/pdf") {
+    // Solo trozos acotados: un archivo entero se pide por /api/download
+    const range = parse_bounded_range(req.headers.range);
+    if (range === null) {
+      throw new HttpError(400, `This endpoint needs a bounded 'Range: bytes=start-end' header of at most ${RANGE_MAX_BYTES} bytes`);
+    }
+    enforce_rate_limit(req, "thumbnail", THUMBNAIL_LIMIT_PER_MINUTE);
+    await handle_pdf_range(req, res, request_url, range);
     return;
   }
   await serve_static(res, request_url.pathname);
