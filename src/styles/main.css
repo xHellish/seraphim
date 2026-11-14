@@ -1,0 +1,302 @@
+/* =============================================
+   Base
+   --------------------------------------------- */
+
+:root {
+  --bg-main: #1a1b26;
+  --bg-gradient-end: #24283b;
+  --bg-panel: rgba(40, 42, 54, 0.8);
+  --bg-card: rgba(68, 71, 90, 0.45);
+  --bg-input: rgba(68, 71, 90, 0.7);
+  --text-main: #f8f8f2;
+  --text-muted: #a9b1d6;
+  --accent-cyan: #8be9fd;
+  --accent-purple: #bd93f9;
+  --accent-pink: #ff79c6;
+  --accent-green: #50fa7b;
+  --error-red: #ff5555;
+  --warning-yellow: #f1fa8c;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  font-family: "Roboto", "Segoe UI", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-main);
+  background-color: var(--bg-main);
+  background-image: linear-gradient(to bottom, var(--bg-main), var(--bg-gradient-end));
+  background-attachment: fixed;
+  padding: 1.5rem 1rem;
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(40, 42, 54, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 233, 253, 0.5);
+  border-radius: 5px;
+}
+
+/* =============================================
+   Header and search form
+   --------------------------------------------- */
+
+.site-header {
+  max-width: 1000px;
+  margin: 0 auto 1.5rem;
+  padding: 1.75rem 1.5rem;
+  background-color: var(--bg-panel);
+  border: 1px solid rgba(139, 233, 253, 0.25);
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.25);
+  text-align: center;
+}
+
+.site-header h1 {
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  letter-spacing: -1px;
+  text-shadow: 0 0 10px rgba(139, 217, 253, 0.6), 0 0 25px rgba(139, 217, 253, 0.3);
+}
+
+.beta-tag {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--accent-purple);
+  text-shadow: none;
+  vertical-align: super;
+}
+
+.tagline {
+  margin: 0.25rem 0 1.25rem;
+  color: var(--text-muted);
+}
+
+.search-form {
+  display: flex;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+#search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.75rem 1.1rem;
+  border: none;
+  border-radius: 50px 0 0 50px;
+  background-color: var(--bg-input);
+  color: var(--text-main);
+  font-size: 1rem;
+  outline: none;
+  transition: box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+#search-input:focus {
+  background-color: rgba(68, 71, 90, 0.95);
+  box-shadow: 0 0 0 2px rgba(189, 147, 249, 0.6);
+}
+
+#search-button {
+  padding: 0.75rem 1.6rem;
+  border: none;
+  border-radius: 0 50px 50px 0;
+  background: linear-gradient(45deg, var(--accent-cyan), var(--accent-purple));
+  color: #282a36;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+#search-button:hover:not(:disabled) {
+  background: linear-gradient(45deg, var(--accent-purple), var(--accent-pink));
+  transform: translateY(-1px);
+}
+
+#search-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* =============================================
+   Results
+   --------------------------------------------- */
+
+.container {
+  max-width: 1000px;
+  min-height: 50vh;
+  margin: 0 auto;
+  padding: 1.5rem;
+  background: rgba(26, 27, 38, 0.9);
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.status-message {
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.status-message.is-error {
+  color: var(--error-red);
+}
+
+.engine-warning {
+  margin-bottom: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--warning-yellow);
+  background-color: rgba(241, 250, 140, 0.08);
+  color: var(--warning-yellow);
+  font-size: 0.9rem;
+}
+
+.results-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.result-card {
+  padding: 1rem 1.25rem;
+  background-color: var(--bg-card);
+  border: 1px solid rgba(139, 233, 253, 0.12);
+  border-radius: 12px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.result-card:hover {
+  border-color: rgba(139, 233, 253, 0.45);
+  transform: translateY(-2px);
+}
+
+.result-title {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 500;
+  color: var(--accent-cyan);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.result-title:hover {
+  text-decoration: underline;
+}
+
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--accent-green);
+}
+
+.result-size {
+  color: var(--text-muted);
+}
+
+.result-snippet {
+  margin-top: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+}
+
+.action-button {
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  border-radius: 50px;
+  background: linear-gradient(45deg, var(--accent-cyan), var(--accent-purple));
+  color: #282a36;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.action-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+
+.action-button.is-secondary {
+  background: transparent;
+  border: 1px solid var(--accent-purple);
+  color: var(--accent-purple);
+}
+
+.load-more-button {
+  display: block;
+  margin: 1.5rem auto 0;
+  padding: 0.65rem 1.8rem;
+  border: 1px solid var(--accent-cyan);
+  border-radius: 50px;
+  background: transparent;
+  color: var(--accent-cyan);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.load-more-button:hover:not(:disabled) {
+  background-color: rgba(139, 233, 253, 0.1);
+}
+
+.load-more-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* =============================================
+   Footer
+   --------------------------------------------- */
+
+.copyright {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* =============================================
+   Responsive
+   --------------------------------------------- */
+
+@media (max-width: 600px) {
+  .site-header h1 {
+    font-size: 1.8rem;
+  }
+
+  .container {
+    padding: 1rem;
+  }
+
+  #search-button {
+    padding: 0.75rem 1rem;
+  }
+}

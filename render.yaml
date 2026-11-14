@@ -1,0 +1,16 @@
+# =============================================
+# Render Blueprint: un solo servicio web gratuito con Docker
+# ---------------------------------------------
+services:
+  - type: web
+    name: seraphim-vision
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      # Render genera un valor aleatorio la primera vez
+      - key: SEARXNG_SECRET
+        generateValue: true

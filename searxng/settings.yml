@@ -1,0 +1,30 @@
+# =============================================
+# SearXNG settings for Seraphim Vision
+# ---------------------------------------------
+# Hereda la configuración por defecto y solo cambia lo necesario.
+# La clave secreta se pasa con la variable de entorno SEARXNG_SECRET.
+
+use_default_settings:
+  engines:
+    # Motores que no devuelven PDFs y fallan sin configuración extra
+    remove:
+      - ahmia
+      - torch
+      - wikipedia
+      - wikidata
+      - openstreetmap
+
+general:
+  instance_name: "Seraphim Vision Search"
+
+search:
+  safe_search: 0
+  # El servidor Node consume la salida JSON
+  formats:
+    - html
+    - json
+
+server:
+  # El acceso lo controla el servidor Node; el limiter necesita Valkey/Redis
+  limiter: false
+  image_proxy: false

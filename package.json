@@ -1,0 +1,13 @@
+{
+  "name": "seraphim-vision",
+  "version": "0.2.0",
+  "description": "Free PDF search across the web, powered by a self-hosted SearXNG instance",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
