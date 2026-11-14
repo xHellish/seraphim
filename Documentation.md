@@ -32,13 +32,18 @@ Navegador  ->  :PORT | server.js (Node)  ->  127.0.0.1:8080 SearXNG    | ->  Bra
   - **Estilos propios**: `styles/main.css` solo añade lo que el kit no trae (barra de búsqueda, resultados y el layout centrado). Para actualizar el kit basta con reemplazar los tres archivos de arriba.
   - **Sin barra lateral**: la página es una sola columna centrada. Como el kit reserva el espacio de `.ax_sidebar` en `.ax_main`, `main.css` lo anula (`margin-left: 0`). `axm.js` no necesita botones de navegación: si no hay `data-section`, su navegación no hace nada.
   - **Dos vistas dentro de Search**: portada (logo, barra y sugerencias) y resultados (título RESULTS, terminal de estado y cartas). Es el mismo DOM; cambia solo la clase del `body` (`is_home` o `is_results`).
-  - **Terminal de estado**: una terminal CRT muestra el progreso de cada búsqueda (`> search "..."`, `found`, `time`, `(cache)`, motores caídos y errores).
+  - **Terminal de estado**: una terminal CRT de altura fija que escribe un log y baja sola, como una terminal real: `> search "..."`, `found`, `time`, `(cache)`, motores caídos y errores. Las líneas del resumen se agregan al mismo log; "Load more" lo continúa y una búsqueda nueva lo limpia.
+  - **Animación de espera** (`start_progress` en `app.js`): mientras llega la respuesta, el log escribe una etapa cada 450 ms (conectar, consultar cada motor, unir resultados, verificar enlaces) y una barra de escaneo `[..####....]` va y viene. Si el servidor tarda más que las etapas, aparece `waiting for slow engines`. El servidor no emite progreso real: las etapas reflejan lo que hace pero son temporizadas, y la lista de motores está duplicada en `SEARCH_ENGINES` (`app.js`) y `ENGINE_GROUPS` (`server.js`).
+  - **Tarjetas fantasma**: en la primera página, tres cartas vacías con el mismo marco y pistas ocupan el lugar de los resultados y pulsan en pasos (`steps()`). El marco de la barra de búsqueda late y el botón pasa a "Scanning" (`body.is_searching`).
+  - **Aparición de resultados**: cada carta hace un parpadeo de píxel de opacidad (`sv_reveal`) con un retraso escalonado de 90 ms, hasta 8 pasos. Solo se mueve la opacidad, nada cambia de tamaño ni de lugar.
+  - **Menos movimiento**: con `prefers-reduced-motion` no hay pulsos ni parpadeos, y la barra de escaneo queda quieta.
   - **Resultados**: cada uno es una carta con marco de color. El color se elige con un hash del dominio, así que un mismo sitio siempre tiene el mismo marco. La acción principal (Download) va en dorado y la secundaria (Open) en violeta.
   - **Partículas y glitch**: `axm.js` solo conecta los elementos que existen al cargar, así que `app.js` conecta las partículas a cada carta nueva (`attach_particles`). El glitch suena una vez, al pasar de la portada a los resultados.
   - **Búsqueda en la URL**: `?q=...` se guarda con `history.pushState`, así que se puede compartir el enlace y funcionan Atrás y Adelante (`popstate`). El enlace "< home" de la vista de resultados vuelve a la portada.
   - **Detalles**: el atajo `/` enfoca la barra y se ignoran las respuestas de búsquedas anteriores (`search_id`).
   - **Solo oscuro**: el kit no tiene tema claro, así que no hay interruptor de tema.
   - **Trampas de BitPap**: la V mayúscula se lee como U, por eso el logo se escribe "Seraphim vision". El 0 se confunde con el 8 a tamaño de texto; como los resultados traen años, versiones y tamaños, `main.css` toma solo el carácter 0 de una fuente del sistema (`@font-face` con `unicode-range: U+0030`) en `.sv_result` y `.sv_status`. Si no hay ninguna instalada, se ve el 0 de BitPap.
+  - **Etiqueta bajo el monitor** (`.ax_crt_label`): en el kit mide 22.8 px de alto sobre una banda de 26 px, así que su parte superior se solapa unos 4 px con el borde de la pantalla y puede verse cortada. `main.css` le da una banda de 38 px, `line-height: 1` y `font-size: 1.1rem` (el mínimo de BitPap), con 9 px libres arriba y abajo. El mismo defecto existe en el kit y en el portafolio.
   - **Caché del navegador**: subir el número de `?v=` en `index.html` cada vez que cambie un CSS o JS.
 - **Servidor** (`server.js`): usa solo la librería estándar de Node (`http`, `fs`, `dns`, `fetch`). Sirve los archivos estáticos y expone dos endpoints.
 - **SearXNG**: metabuscador de código abierto que se aloja aparte. Se configura con `searxng/settings.yml`, que activa la salida JSON.
@@ -133,6 +138,14 @@ El límite por IP usa el primer valor de `X-Forwarded-For`. Un cliente puede fal
 - **Bloqueos de bots**: algunos sitios bloquean peticiones que no vienen de un navegador; esos PDFs se descartan aunque existan.
 
 ## Decision Log
+
+### 2026-11-14 - Búsqueda con sensación de actividad
+
+- Se pidió que al buscar no se viera estático. Se resolvió dentro del estilo AXM, sin spinners genéricos: la terminal CRT escribe el log de la búsqueda, hay una barra de escaneo, tarjetas fantasma y los resultados aparecen escalonados.
+- **Progreso simulado pero fiel**: el servidor responde de una sola vez, así que las etapas del log son temporizadas. Reflejan lo que de verdad hace el servidor (motores en paralelo y verificación de enlaces) y se detienen en cuanto llega la respuesta. Si hay caché, solo se ven el resumen y los resultados.
+- **Descartado: progreso real por streaming** (Server-Sent Events). Daría etapas reales, pero obliga a cambiar `/api/search` y la caché; no compensa por ahora.
+- **Terminal de altura fija** para que los resultados no se desplacen mientras el log crece.
+- **Descartado: un porcentaje de avance**, porque sería inventado. La barra de escaneo es indeterminada.
 
 ### 2026-11-14 - Estilo AXM del portafolio
 

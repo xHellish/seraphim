@@ -12,7 +12,7 @@
     <!-- Fuente pixel precargada y estilo AXM -->
     <link rel="preload" href="assets/fonts/BitPap.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="stylesheet" href="css/axm.css?v=1">
-    <link rel="stylesheet" href="styles/main.css?v=3">
+    <link rel="stylesheet" href="styles/main.css?v=5">
 </head>
 
 <body class="is_home">
@@ -85,6 +85,31 @@
 
                 <ol id="results-list" class="sv_results sv_results_only"></ol>
 
+                <!-- Tarjetas fantasma: ocupan el lugar de los resultados mientras se busca -->
+                <ol id="ghost-list" class="sv_results sv_results_only sv_ghost_list" aria-hidden="true" hidden>
+                    <li>
+                        <div class="ax_frame ax_card sv_ghost" style="--accent: var(--cyan);">
+                            <div class="ax_face ax_traces ax_card_face">
+                                <span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="ax_frame ax_card sv_ghost" style="--accent: var(--violet);">
+                            <div class="ax_face ax_traces ax_card_face">
+                                <span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span>
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="ax_frame ax_card sv_ghost" style="--accent: var(--green);">
+                            <div class="ax_face ax_traces ax_card_face">
+                                <span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span><span class="sv_ghost_bar"></span>
+                            </div>
+                        </div>
+                    </li>
+                </ol>
+
                 <div class="sv_more sv_results_only">
                     <button id="load-more-button" class="ax_frame ax_button" type="button" style="--accent: var(--violet);" hidden>
                         <span class="ax_face"><span>Load more</span></span>
@@ -94,12 +119,12 @@
         </section>
 
         <footer class="sv_footer">
-            <p>(c) 2025 Ben Farz // powered by SearXNG</p>
+            <p>(c) 2026 Ben Farz // powered by SearXNG</p>
         </footer>
     </main>
 
     <script src="js/axm.js?v=1"></script>
-    <script type="module" src="scripts/app.js?v=2"></script>
+    <script type="module" src="scripts/app.js?v=3"></script>
 </body>
 
 </html>

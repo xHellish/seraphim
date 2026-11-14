@@ -186,6 +186,102 @@ body.is_home #search {
     overflow-wrap: anywhere;
 }
 
+/* Etiqueta bajo el monitor: el kit la deja de 22.8 px de alto sobre una banda de 26 px, así que
+   su parte superior invade el borde de la pantalla y puede verse cortada. Se le da una banda
+   propia y un alto de línea ajustado, y se respeta el mínimo de 1.1rem de BitPap. */
+.ax_crt {
+    padding-bottom: 38px;
+}
+
+.ax_crt_label {
+    bottom: 9px;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+/* Altura fija: el log escribe líneas y baja solo, sin empujar los resultados */
+.sv_status .ax_crt_body {
+    height: 15.3rem;
+    overflow: hidden;
+}
+
+/* =============================================
+   Búsqueda en curso
+   --------------------------------------------- */
+/* El marco de la barra late mientras se busca (solo brillo, no se mueve) */
+body.is_searching .sv_search_frame {
+    animation: sv_search_pulse 1.2s steps(6) infinite;
+}
+
+@keyframes sv_search_pulse {
+    50% {
+        filter: brightness(1.45);
+    }
+}
+
+/* Tarjetas fantasma con el mismo marco y pistas que las reales */
+.sv_ghost .ax_card_face {
+    gap: 14px;
+    min-height: 168px;
+}
+
+.sv_ghost_bar {
+    display: block;
+    height: 14px;
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+    animation: sv_ghost_pulse 1.2s steps(6) infinite;
+}
+
+.sv_ghost_bar:nth-child(1) {
+    width: 16%;
+}
+
+.sv_ghost_bar:nth-child(2) {
+    width: 58%;
+    height: 22px;
+    animation-delay: 0.15s;
+}
+
+.sv_ghost_bar:nth-child(3) {
+    width: 34%;
+    animation-delay: 0.3s;
+}
+
+.sv_ghost_bar:nth-child(4) {
+    width: 90%;
+    animation-delay: 0.45s;
+}
+
+@keyframes sv_ghost_pulse {
+    50% {
+        opacity: 0.35;
+    }
+}
+
+/* Los resultados aparecen uno tras otro, con parpadeo de píxel (solo opacidad) */
+.sv_result {
+    animation: sv_reveal 0.4s steps(4) both;
+    animation-delay: var(--reveal_delay, 0ms);
+}
+
+@keyframes sv_reveal {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.is_searching .sv_search_frame,
+    .sv_ghost_bar,
+    .sv_result {
+        animation: none;
+    }
+}
+
 /* =============================================
    Resultados (cartas con marco de color)
    --------------------------------------------- */

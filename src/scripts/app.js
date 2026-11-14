@@ -5,10 +5,12 @@
 const search_form = document.getElementById("search-form");
 const search_input = document.getElementById("search-input");
 const search_button = document.getElementById("search-button");
+const search_label = search_button.querySelector(".ax_face > span");
 const suggestion_buttons = document.querySelectorAll(".sv_suggestion");
 const results_title = document.getElementById("results-title");
 const status_body = document.getElementById("status-body");
 const results_list = document.getElementById("results-list");
+const ghost_list = document.getElementById("ghost-list");
 const load_more_button = document.getElementById("load-more-button");
 const load_more_label = load_more_button.querySelector(".ax_face > span");
 const home_link = document.getElementById("home-link");
@@ -22,6 +24,20 @@ const home_logo = document.querySelector(".sv_logo");
 const RESULT_ACCENTS = ["cyan", "violet", "green", "pink"];
 const LOAD_MORE_TEXT = "Load more";
 const LOADING_TEXT = "Loading...";
+const SEARCH_TEXT = "Search";
+const SCANNING_TEXT = "Scanning";
+
+// Motores que consulta el servidor (ENGINE_GROUPS en server.js), para el log de progreso
+const SEARCH_ENGINES = ["brave", "google cse", "duckduckgo", "yandex"];
+
+// Ritmo de la animación de progreso
+const STAGE_INTERVAL_MS = 450;
+const SCAN_TICK_MS = 110;
+const SCAN_WIDTH = 18;
+const SCAN_BLOCK = 4;
+const STATUS_LINE_DELAY_MS = 130;
+const RESULT_REVEAL_STEP_MS = 90;
+const RESULT_REVEAL_MAX_STEPS = 8;
 
 const search_state = {
   query: "",
@@ -30,6 +46,13 @@ const search_state = {
   shown_count: 0,
   // Identifica la búsqueda actual para ignorar respuestas viejas
   search_id: 0,
+};
+
+// Temporizadores y línea de escaneo de la animación de progreso
+const progress_state = {
+  stage_timer: null,
+  scan_timer: null,
+  scan_paragraph: null,
 };
 
 // =============================================
@@ -117,13 +140,25 @@ function get_engine_names(unresponsive_engines) {
   return engine_names;
 }
 
+// Espera una cantidad de milisegundos
+function wait_ms(milliseconds) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+// Indica si el usuario pidió menos movimiento en el sistema
+function prefers_reduced_motion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 // =============================================
 // Particles (axm.js solo conecta los elementos que existen al cargar)
 // ---------------------------------------------
 
 // Conecta las partículas de axm.js a un elemento creado después
 function attach_particles(element) {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if (prefers_reduced_motion()) {
     return;
   }
   let emitter = null;
@@ -153,6 +188,144 @@ function attach_particles(element) {
 }
 
 // =============================================
+// Status terminal (log que se escribe solo, como una terminal real)
+// ---------------------------------------------
+
+// Quita el cursor de bloque de la terminal
+function remove_status_cursor() {
+  const cursor = status_body.querySelector(".ax_cursor");
+  if (cursor !== null) {
+    cursor.remove();
+  }
+}
+
+// Baja el log hasta la última línea
+function scroll_status_to_end() {
+  status_body.scrollTop = status_body.scrollHeight;
+}
+
+// Agrega una línea al final con el cursor detrás; kind es info, gen, warn, glitch o dim
+function append_status_line(kind, text) {
+  remove_status_cursor();
+  const paragraph = create_element("p", `ax_term_${kind}`, text);
+  paragraph.appendChild(create_element("span", "ax_cursor"));
+  status_body.appendChild(paragraph);
+  scroll_status_to_end();
+}
+
+// Agrega varias líneas con una pausa corta entre cada una; se corta si hay otra búsqueda
+async function append_status_lines(lines, search_id) {
+  for (const line of lines) {
+    if (search_id !== search_state.search_id) {
+      return;
+    }
+    append_status_line(line.kind, line.text);
+    await wait_ms(STATUS_LINE_DELAY_MS);
+  }
+}
+
+// Dibuja la barra de escaneo: un bloque que recorre la barra
+function build_scan_frame(position) {
+  let frame = "";
+  for (let index = 0; index < SCAN_WIDTH; index++) {
+    if (index >= position && index < position + SCAN_BLOCK) {
+      frame += "#";
+    } else {
+      frame += ".";
+    }
+  }
+  return `[${frame}]`;
+}
+
+// Detiene la animación de progreso y quita la línea de escaneo
+function stop_progress() {
+  if (progress_state.stage_timer !== null) {
+    clearInterval(progress_state.stage_timer);
+    progress_state.stage_timer = null;
+  }
+  if (progress_state.scan_timer !== null) {
+    clearInterval(progress_state.scan_timer);
+    progress_state.scan_timer = null;
+  }
+  if (progress_state.scan_paragraph !== null) {
+    progress_state.scan_paragraph.remove();
+    progress_state.scan_paragraph = null;
+  }
+}
+
+// Arma las etapas del log: reflejan lo que hace el servidor (motores en paralelo y verificación)
+function build_progress_stages(query, is_new_search) {
+  const stages = [];
+  if (is_new_search) {
+    stages.push({ kind: "info", text: `> search "${query}"` });
+  } else {
+    stages.push({ kind: "info", text: "> load more" });
+  }
+  stages.push({ kind: "gen", text: "connecting to engines ......" });
+  for (const engine_name of SEARCH_ENGINES) {
+    stages.push({ kind: "gen", text: `[${engine_name}] querying ...` });
+  }
+  stages.push({ kind: "gen", text: "merging results ......" });
+  stages.push({ kind: "gen", text: "checking links, real pdfs only ......" });
+  return stages;
+}
+
+// Inicia el log de progreso y la barra de escaneo mientras llega la respuesta
+function start_progress(query, is_new_search) {
+  stop_progress();
+  if (is_new_search) {
+    status_body.replaceChildren();
+  }
+  remove_status_cursor();
+
+  // 1. Línea de escaneo al final, con el cursor parpadeando
+  const scan_paragraph = create_element("p", "ax_term_info");
+  const scan_text = create_element("span", "", build_scan_frame(0));
+  scan_paragraph.appendChild(scan_text);
+  scan_paragraph.appendChild(create_element("span", "ax_cursor"));
+  status_body.appendChild(scan_paragraph);
+  progress_state.scan_paragraph = scan_paragraph;
+
+  // 2. Las etapas se escriben una por una, siempre encima de la línea de escaneo
+  const stages = build_progress_stages(query, is_new_search);
+  let stage_index = 0;
+  let has_waiting_line = false;
+  const add_next_stage = () => {
+    if (stage_index < len_of(stages)) {
+      const stage = stages[stage_index];
+      status_body.insertBefore(create_element("p", `ax_term_${stage.kind}`, stage.text), scan_paragraph);
+      stage_index += 1;
+    } else if (!has_waiting_line) {
+      // Si el servidor tarda más que las etapas, se avisa que sigue trabajando
+      status_body.insertBefore(create_element("p", "ax_term_warn", "waiting for slow engines ......"), scan_paragraph);
+      has_waiting_line = true;
+      clearInterval(progress_state.stage_timer);
+      progress_state.stage_timer = null;
+    }
+    scroll_status_to_end();
+  };
+  add_next_stage();
+  progress_state.stage_timer = setInterval(add_next_stage, STAGE_INTERVAL_MS);
+
+  // 3. El bloque de la barra de escaneo va y viene (quieto si se pidió menos movimiento)
+  if (!prefers_reduced_motion()) {
+    let position = 0;
+    let step = 1;
+    progress_state.scan_timer = setInterval(() => {
+      position += step;
+      if (position >= SCAN_WIDTH - SCAN_BLOCK) {
+        position = SCAN_WIDTH - SCAN_BLOCK;
+        step = -1;
+      } else if (position <= 0) {
+        position = 0;
+        step = 1;
+      }
+      scan_text.textContent = build_scan_frame(position);
+    }, SCAN_TICK_MS);
+  }
+}
+
+// =============================================
 // Rendering
 // ---------------------------------------------
 
@@ -160,18 +333,6 @@ function attach_particles(element) {
 function set_view(view_name) {
   document.body.classList.remove("is_home", "is_results");
   document.body.classList.add(`is_${view_name}`);
-}
-
-// Pinta las líneas de la terminal de estado; kind es info, gen, warn, glitch o dim
-function render_status(lines, show_cursor) {
-  status_body.replaceChildren();
-  for (const [index, line] of lines.entries()) {
-    const paragraph = create_element("p", `ax_term_${line.kind}`, line.text);
-    if (show_cursor && index === len_of(lines) - 1) {
-      paragraph.appendChild(create_element("span", "ax_cursor"));
-    }
-    status_body.appendChild(paragraph);
-  }
 }
 
 // Crea un botón de acción como enlace; accent_name es una variable de axm.css
@@ -255,13 +416,18 @@ function create_result_item(result, parsed_url, result_number) {
   return item;
 }
 
-// Agrega una página de resultados a la lista
+// Agrega una página de resultados a la lista; cada carta aparece un poco después de la anterior
 function render_results(results) {
+  let page_position = 0;
   for (const result of results) {
     const parsed_url = parse_safe_url(result.url);
     if (parsed_url !== null) {
       search_state.shown_count += 1;
-      results_list.appendChild(create_result_item(result, parsed_url, search_state.shown_count));
+      const item = create_result_item(result, parsed_url, search_state.shown_count);
+      const reveal_step = Math.min(page_position, RESULT_REVEAL_MAX_STEPS);
+      item.style.setProperty("--reveal_delay", `${reveal_step * RESULT_REVEAL_STEP_MS}ms`);
+      results_list.appendChild(item);
+      page_position += 1;
     }
   }
 }
@@ -270,14 +436,18 @@ function render_results(results) {
 // Search
 // ---------------------------------------------
 
-// Activa o desactiva los controles mientras se busca
-function set_loading(is_loading) {
+// Activa o desactiva los controles y la animación de espera
+function set_loading(is_loading, show_ghosts) {
   search_state.is_loading = is_loading;
   search_button.disabled = is_loading;
   load_more_button.disabled = is_loading;
+  document.body.classList.toggle("is_searching", is_loading);
+  ghost_list.hidden = !(is_loading && show_ghosts);
   if (is_loading) {
+    search_label.textContent = SCANNING_TEXT;
     load_more_label.textContent = LOADING_TEXT;
   } else {
+    search_label.textContent = SEARCH_TEXT;
     load_more_label.textContent = LOAD_MORE_TEXT;
   }
 }
@@ -290,14 +460,36 @@ function format_elapsed(elapsed_ms) {
   return `${(elapsed_ms / 1000).toFixed(1)} s`;
 }
 
+// Líneas del resumen final que se agregan al log
+function build_summary_lines(data, elapsed_ms) {
+  const lines = [];
+  if (search_state.shown_count === 0 && !data.has_more) {
+    lines.push({ kind: "warn", text: "[warn] no pdfs found, try other words" });
+  } else if (search_state.shown_count === 0) {
+    lines.push({ kind: "warn", text: "[warn] no pdfs on this page, load more" });
+  } else {
+    lines.push({ kind: "gen", text: `found: ${search_state.shown_count} pdfs [OK]` });
+  }
+  let time_text = `time: ${format_elapsed(elapsed_ms)}`;
+  if (data.cached) {
+    time_text = `${time_text} (cache)`;
+  }
+  lines.push({ kind: "gen", text: time_text });
+  const engine_names = get_engine_names(data.unresponsive_engines);
+  if (len_of(engine_names) > 0) {
+    lines.push({ kind: "warn", text: `[warn] engines down: ${engine_names.join(", ")}` });
+  }
+  lines.push({ kind: "info", text: "ready" });
+  return lines;
+}
+
 // Pide una página de resultados al servidor y la pinta
 async function run_search(query, page) {
-  // 1. Preparar estado y avisar en la terminal
+  // 1. Preparar estado y arrancar la animación de espera
   const search_id = search_state.search_id;
   const started_at = performance.now();
-  const prompt_line = { kind: "info", text: `> search "${query}"` };
-  set_loading(true);
-  render_status([prompt_line, { kind: "gen", text: "querying engines ......" }], true);
+  set_loading(true, page === 1);
+  start_progress(query, page === 1);
 
   try {
     // 2. Llamar a la API propia
@@ -313,42 +505,26 @@ async function run_search(query, page) {
       return;
     }
 
-    // 3. Pintar los resultados
+    // 3. Pintar los resultados y liberar los controles
+    const elapsed_ms = performance.now() - started_at;
     render_results(data.results);
-
-    // 4. Resumen en la terminal: cantidad, tiempo, caché y motores caídos
-    const lines = [prompt_line];
-    if (search_state.shown_count === 0 && !data.has_more) {
-      lines.push({ kind: "warn", text: "[warn] no pdfs found, try other words" });
-    } else if (search_state.shown_count === 0) {
-      lines.push({ kind: "warn", text: "[warn] no pdfs on this page, load more" });
-    } else {
-      lines.push({ kind: "gen", text: `found: ${search_state.shown_count} pdfs [OK]` });
-    }
-    let time_text = `time: ${format_elapsed(performance.now() - started_at)}`;
-    if (data.cached) {
-      time_text = `${time_text} (cache)`;
-    }
-    lines.push({ kind: "gen", text: time_text });
-    const engine_names = get_engine_names(data.unresponsive_engines);
-    if (len_of(engine_names) > 0) {
-      lines.push({ kind: "warn", text: `[warn] engines down: ${engine_names.join(", ")}` });
-    }
-    lines.push({ kind: "info", text: "ready" });
-    render_status(lines, true);
-
-    // 5. Mostrar "Load more" solo si el buscador trajo candidatos
+    stop_progress();
+    set_loading(false, false);
     load_more_button.hidden = !data.has_more;
+
+    // 4. El resumen se escribe en el mismo log, línea por línea
+    await append_status_lines(build_summary_lines(data, elapsed_ms), search_id);
   } catch (error) {
     if (search_id !== search_state.search_id) {
       return;
     }
     console.error(`Search failed: ${error.message}`);
-    render_status([prompt_line, { kind: "warn", text: `[error] ${error.message}` }, { kind: "info", text: "ready" }], true);
-  } finally {
-    if (search_id === search_state.search_id) {
-      set_loading(false);
-    }
+    stop_progress();
+    set_loading(false, false);
+    await append_status_lines([
+      { kind: "warn", text: `[error] ${error.message}` },
+      { kind: "info", text: "ready" },
+    ], search_id);
   }
 }
 
@@ -384,8 +560,10 @@ function show_home(update_url) {
   search_state.search_id += 1;
   search_state.query = "";
   results_list.replaceChildren();
+  status_body.replaceChildren();
   load_more_button.hidden = true;
-  set_loading(false);
+  stop_progress();
+  set_loading(false, false);
   search_input.value = "";
   document.title = "Seraphim Vision";
   if (update_url) {
