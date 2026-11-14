@@ -30,6 +30,7 @@ const TRUST_PROXY = process.env.TRUST_PROXY === "true";
 const MAX_DOWNLOAD_BYTES = Number(process.env.MAX_DOWNLOAD_BYTES || String(50 * 1024 * 1024));
 const SEARCH_LIMIT_PER_MINUTE = Number(process.env.SEARCH_LIMIT_PER_MINUTE || "20");
 const DOWNLOAD_LIMIT_PER_MINUTE = Number(process.env.DOWNLOAD_LIMIT_PER_MINUTE || "10");
+const PREVIEW_LIMIT_PER_MINUTE = Number(process.env.PREVIEW_LIMIT_PER_MINUTE || "20");
 const RATE_LIMIT_WINDOW_MS = 60000;
 const SEARCH_CACHE_TTL_MINUTES = Number(process.env.SEARCH_CACHE_TTL_MINUTES || "60");
 
@@ -530,6 +531,8 @@ async function run_pdf_search(clean_query, page) {
       snippet: candidate.content || "",
       engines: candidate.engines || [],
       size_bytes: verification.size_bytes,
+      // Falso si el PDF supera el tope que reenvía el servidor (preview y descarga)
+      previewable: verification.size_bytes === null || verification.size_bytes <= MAX_DOWNLOAD_BYTES,
     });
   }
 
@@ -628,8 +631,8 @@ function wait_for_drain(res) {
   });
 }
 
-// GET /api/download?url=... reenvía el PDF como adjunto
-async function handle_download(req, res, request_url) {
+// Reenvía un PDF de otro sitio; disposition es "attachment" (descarga) o "inline" (preview)
+async function handle_download(req, res, request_url, disposition) {
   // 1. Validar parámetro
   const target_url = request_url.searchParams.get("url");
   if (target_url === null || target_url === "") {
@@ -677,7 +680,9 @@ async function handle_download(req, res, request_url) {
   // 4. Enviar cabeceras y el contenido en streaming
   const response_headers = {
     "content-type": "application/pdf",
-    "content-disposition": `attachment; filename="${build_download_filename(final_url)}"`,
+    "content-disposition": `${disposition}; filename="${build_download_filename(final_url)}"`,
+    // El archivo se sirve desde nuestro origen: nunca debe interpretarse como otro tipo
+    "x-content-type-options": "nosniff",
     "cache-control": "no-store",
   };
   if (content_length !== null) {
@@ -712,7 +717,7 @@ async function handle_download(req, res, request_url) {
     }
   }
   res.end();
-  log("info", `Downloaded ${final_url}`);
+  log("info", `Forwarded (${disposition}) ${final_url}`);
 }
 
 // Sirve archivos estáticos desde src/
@@ -765,7 +770,12 @@ async function handle_request(req, res) {
   }
   if (request_url.pathname === "/api/download") {
     enforce_rate_limit(req, "download", DOWNLOAD_LIMIT_PER_MINUTE);
-    await handle_download(req, res, request_url);
+    await handle_download(req, res, request_url, "attachment");
+    return;
+  }
+  if (request_url.pathname === "/api/preview") {
+    enforce_rate_limit(req, "preview", PREVIEW_LIMIT_PER_MINUTE);
+    await handle_download(req, res, request_url, "inline");
     return;
   }
   await serve_static(res, request_url.pathname);

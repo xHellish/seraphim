@@ -15,6 +15,14 @@ const load_more_button = document.getElementById("load-more-button");
 const load_more_label = load_more_button.querySelector(".ax_face > span");
 const home_link = document.getElementById("home-link");
 const home_logo = document.querySelector(".sv_logo");
+const main_element = document.querySelector(".ax_main");
+const preview_modal = document.getElementById("preview-modal");
+const preview_title = document.getElementById("preview-title");
+const preview_frame = document.getElementById("preview-frame");
+const preview_log = document.getElementById("preview-log");
+const preview_open = document.getElementById("preview-open");
+const preview_download = document.getElementById("preview-download");
+const preview_close = document.getElementById("preview-close");
 
 // =============================================
 // Constants and state
@@ -26,6 +34,11 @@ const LOAD_MORE_TEXT = "Load more";
 const LOADING_TEXT = "Loading...";
 const SEARCH_TEXT = "Search";
 const SCANNING_TEXT = "Scanning";
+
+// Los navegadores de celular no incrustan PDFs: ahí solo se muestra "Open"
+const CAN_PREVIEW = navigator.pdfViewerEnabled !== false;
+const PROGRESS_BAR_WIDTH = 20;
+const PREVIEW_RENDER_FALLBACK_MS = 2500;
 
 // Motores que consulta el servidor (ENGINE_GROUPS en server.js), para el log de progreso
 const SEARCH_ENGINES = ["brave", "google cse", "duckduckgo", "yandex"];
@@ -53,6 +66,14 @@ const progress_state = {
   stage_timer: null,
   scan_timer: null,
   scan_paragraph: null,
+};
+
+// Preview abierta: identificador, descarga en curso, PDF en memoria y botón que la abrió
+const preview_state = {
+  id: 0,
+  controller: null,
+  blob_url: null,
+  opener: null,
 };
 
 // =============================================
@@ -191,12 +212,17 @@ function attach_particles(element) {
 // Status terminal (log que se escribe solo, como una terminal real)
 // ---------------------------------------------
 
-// Quita el cursor de bloque de la terminal
-function remove_status_cursor() {
-  const cursor = status_body.querySelector(".ax_cursor");
+// Quita el cursor de bloque de una terminal
+function remove_cursor(container) {
+  const cursor = container.querySelector(".ax_cursor");
   if (cursor !== null) {
     cursor.remove();
   }
+}
+
+// Quita el cursor de bloque de la terminal de estado
+function remove_status_cursor() {
+  remove_cursor(status_body);
 }
 
 // Baja el log hasta la última línea
@@ -204,13 +230,19 @@ function scroll_status_to_end() {
   status_body.scrollTop = status_body.scrollHeight;
 }
 
-// Agrega una línea al final con el cursor detrás; kind es info, gen, warn, glitch o dim
-function append_status_line(kind, text) {
-  remove_status_cursor();
+// Agrega una línea al final de una terminal con el cursor detrás; kind es info, gen, warn, glitch o dim
+function append_log_line(container, kind, text) {
+  remove_cursor(container);
   const paragraph = create_element("p", `ax_term_${kind}`, text);
   paragraph.appendChild(create_element("span", "ax_cursor"));
-  status_body.appendChild(paragraph);
-  scroll_status_to_end();
+  container.appendChild(paragraph);
+  container.scrollTop = container.scrollHeight;
+  return paragraph;
+}
+
+// Agrega una línea al log de la terminal de estado
+function append_status_line(kind, text) {
+  append_log_line(status_body, kind, text);
 }
 
 // Agrega varias líneas con una pausa corta entre cada una; se corta si hay otra búsqueda
@@ -392,8 +424,21 @@ function create_result_item(result, parsed_url, result_number) {
     face.appendChild(engine_list);
   }
 
-  // 6. Acciones: abrir en secundario, descargar en dorado
+  // 6. Acciones: preview en cian, abrir en secundario, descargar en dorado
   const actions = create_element("div", "ax_card_actions ax_card_actions_row");
+  let preview_button = null;
+  if (CAN_PREVIEW && result.previewable !== false) {
+    preview_button = create_element("button", "ax_frame ax_button ax_button_small");
+    preview_button.type = "button";
+    preview_button.style.setProperty("--accent", "var(--cyan)");
+    const preview_face = create_element("span", "ax_face");
+    preview_face.appendChild(create_element("span", "", "Preview"));
+    preview_button.appendChild(preview_face);
+    preview_button.addEventListener("click", () => {
+      open_preview(parsed_url.href, file_name, preview_button);
+    });
+    actions.appendChild(preview_button);
+  }
   const open_button = create_action_button("Open", parsed_url.href, "violet");
   open_button.target = "_blank";
   open_button.rel = "noopener noreferrer";
@@ -411,6 +456,9 @@ function create_result_item(result, parsed_url, result_number) {
 
   // Partículas al pasar el cursor, como en el resto del estilo
   attach_particles(card);
+  if (preview_button !== null) {
+    attach_particles(preview_button);
+  }
   attach_particles(open_button);
   attach_particles(download_button);
   return item;
@@ -429,6 +477,158 @@ function render_results(results) {
       results_list.appendChild(item);
       page_position += 1;
     }
+  }
+}
+
+// =============================================
+// Preview (el servidor reenvía el PDF y el visor nativo del navegador lo muestra)
+// ---------------------------------------------
+
+// Dibuja una barra de texto con el avance real de la descarga
+function build_progress_bar(fraction) {
+  const filled = Math.round(Math.min(Math.max(fraction, 0), 1) * PROGRESS_BAR_WIDTH);
+  let bar = "";
+  for (let index = 0; index < PROGRESS_BAR_WIDTH; index++) {
+    if (index < filled) {
+      bar += "#";
+    } else {
+      bar += ".";
+    }
+  }
+  return `[${bar}]`;
+}
+
+// Cancela la descarga, libera el PDF de memoria y vacía el visor
+function release_preview() {
+  preview_state.id += 1;
+  if (preview_state.controller !== null) {
+    preview_state.controller.abort();
+    preview_state.controller = null;
+  }
+  if (preview_state.blob_url !== null) {
+    URL.revokeObjectURL(preview_state.blob_url);
+    preview_state.blob_url = null;
+  }
+  preview_frame.src = "about:blank";
+}
+
+// Descarga el PDF por /api/preview mostrando el progreso real en el log; devuelve null si se canceló
+async function download_preview_blob(pdf_url, preview_id, controller) {
+  // 1. Pedir el archivo; los errores del servidor vienen como JSON
+  const response = await fetch(`/api/preview?${new URLSearchParams({ url: pdf_url })}`, { signal: controller.signal });
+  if (!response.ok) {
+    let message = `Server responded with status ${response.status}`;
+    try {
+      const data = await response.json();
+      if (data.error) {
+        message = data.error;
+      }
+    } catch (error) {
+      console.warn(`Could not read the error body: ${error.message}`);
+    }
+    throw new Error(message);
+  }
+
+  // 2. Leer el cuerpo por partes para mostrar el avance
+  const total_bytes = Number(response.headers.get("content-length") || "0");
+  const progress_line = append_log_line(preview_log, "gen", "downloading ......");
+  const reader = response.body.getReader();
+  const chunks = [];
+  let received_bytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    if (preview_id !== preview_state.id) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+    received_bytes += value.length;
+    let progress_text = `downloading: ${format_size(received_bytes)}`;
+    if (total_bytes > 0) {
+      progress_text = `${progress_text} / ${format_size(total_bytes)} ${build_progress_bar(received_bytes / total_bytes)}`;
+    }
+    // El primer hijo es el texto; el segundo es el cursor, que se conserva
+    progress_line.firstChild.nodeValue = progress_text;
+  }
+  return new Blob(chunks, { type: "application/pdf" });
+}
+
+// Abre la ventana de preview y muestra el PDF cuando termina de descargarse
+async function open_preview(pdf_url, file_name, opener_element) {
+  // 1. Limpiar lo anterior y preparar la ventana
+  release_preview();
+  const preview_id = preview_state.id;
+  const controller = new AbortController();
+  preview_state.controller = controller;
+  preview_state.opener = opener_element;
+  let display_name = file_name;
+  if (display_name === "") {
+    display_name = "document.pdf";
+  }
+  let download_name = display_name;
+  if (!download_name.toLowerCase().endsWith(".pdf")) {
+    download_name = `${download_name}.pdf`;
+  }
+  preview_title.textContent = `${display_name} :: preview`;
+  preview_open.href = pdf_url;
+  preview_download.hidden = true;
+  preview_log.replaceChildren();
+  preview_log.hidden = false;
+  preview_modal.hidden = false;
+  main_element.inert = true;
+  document.body.classList.add("has_modal");
+  preview_close.focus();
+  append_log_line(preview_log, "info", `> open ${display_name}`);
+  append_log_line(preview_log, "gen", "connecting ......");
+
+  try {
+    // 2. Descargar el PDF con progreso
+    const blob = await download_preview_blob(pdf_url, preview_id, controller);
+    if (blob === null || preview_id !== preview_state.id) {
+      return;
+    }
+
+    // 3. Mostrarlo en el visor nativo y habilitar la descarga desde memoria (sin pedirlo otra vez)
+    preview_state.blob_url = URL.createObjectURL(blob);
+    preview_download.href = preview_state.blob_url;
+    preview_download.download = download_name;
+    preview_download.hidden = false;
+    append_log_line(preview_log, "gen", "rendering ......");
+    const hide_log = () => {
+      if (preview_id === preview_state.id) {
+        preview_log.hidden = true;
+      }
+    };
+    preview_frame.addEventListener("load", hide_log, { once: true });
+    setTimeout(hide_log, PREVIEW_RENDER_FALLBACK_MS);
+    preview_frame.src = `${preview_state.blob_url}#view=FitH`;
+  } catch (error) {
+    // Un cierre de la ventana cancela la descarga: no es un error
+    if (preview_id !== preview_state.id) {
+      return;
+    }
+    console.error(`Preview failed: ${error.message}`);
+    append_log_line(preview_log, "warn", `[error] ${error.message}`);
+    append_log_line(preview_log, "info", 'use "Open" to read it at the source');
+  }
+}
+
+// Cierra la ventana de preview y devuelve el foco al botón que la abrió
+function close_preview() {
+  if (preview_modal.hidden) {
+    return;
+  }
+  release_preview();
+  preview_modal.hidden = true;
+  main_element.inert = false;
+  document.body.classList.remove("has_modal");
+  const opener = preview_state.opener;
+  preview_state.opener = null;
+  if (opener !== null && opener.isConnected) {
+    opener.focus();
   }
 }
 
@@ -531,6 +731,7 @@ async function run_search(query, page) {
 // Empieza una búsqueda nueva desde la página 1
 function start_search(query, update_url) {
   // 1. Reiniciar estado y lista
+  close_preview();
   const was_home = document.body.classList.contains("is_home");
   search_state.search_id += 1;
   search_state.query = query;
@@ -557,6 +758,7 @@ function start_search(query, update_url) {
 
 // Vuelve a la portada
 function show_home(update_url) {
+  close_preview();
   search_state.search_id += 1;
   search_state.query = "";
   results_list.replaceChildren();
@@ -625,8 +827,18 @@ home_link.addEventListener("click", (event) => {
 // Botones Atrás / Adelante del navegador
 window.addEventListener("popstate", load_from_url);
 
-// "/" enfoca la barra de búsqueda si no se está escribiendo
+// Cerrar la preview: botón Close, clic en el fondo o Escape
+preview_close.addEventListener("click", close_preview);
+preview_modal.querySelector(".sv_modal_backdrop").addEventListener("click", close_preview);
+
+// "/" enfoca la barra de búsqueda si no se está escribiendo; con la preview abierta solo cuenta Escape
 document.addEventListener("keydown", (event) => {
+  if (!preview_modal.hidden) {
+    if (event.key === "Escape") {
+      close_preview();
+    }
+    return;
+  }
   const active_tag = document.activeElement.tagName;
   if (event.key === "/" && active_tag !== "INPUT" && active_tag !== "TEXTAREA") {
     event.preventDefault();

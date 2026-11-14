@@ -8,7 +8,7 @@ Results come from [SearXNG](https://github.com/searxng/searxng), a free, open so
 
 - Web-wide PDF search through SearXNG, with no paid API keys
 - Every result is verified (HTTP headers or the `%PDF-` file signature)
-- Open the PDF in a new tab or download it as an attachment
+- Preview any PDF inside the page (browser PDF viewer in a CRT-style window), open it at the source or download it
 - Pagination with "Load more"
 - Warning when a search engine is blocked (for example by a CAPTCHA)
 - In-memory cache: repeated searches answer instantly and known PDFs are not re-checked
@@ -55,7 +55,7 @@ npm start
 ## Project structure
 
 ```
-server.js              Node server: static files, /api/search, /api/download, /healthz
+server.js              Node server: static files, /api/search, /api/download, /api/preview, /healthz
 src/                   Search page (index.html, scripts/app.js, styles/main.css)
 src/css, src/js        AXM style kit (axm.css, axm.js), copied unchanged
 src/assets             BitPap font, circuit backgrounds, cursors and logo
