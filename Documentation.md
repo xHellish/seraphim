@@ -35,9 +35,16 @@ Navegador  ->  :PORT | server.js (Node)  ->  127.0.0.1:8080 SearXNG    | ->  Bra
 
 ### `GET /api/search?q=<texto>&page=<1-20>`
 
-1. Quita cualquier `filetype:` que escriba el usuario y añade `filetype:pdf`.
-2. Consulta SearXNG (`format=json`, `categories=general`).
-3. Elimina las URLs duplicadas.
+1. Quita los operadores `filetype:`, `mime:` y `ext:` que escriba el usuario.
+2. Consulta SearXNG en paralelo, una vez por cada grupo de motores (`ENGINE_GROUPS` en `server.js`), con el operador que entiende ese grupo:
+
+   | Grupo | Operador |
+   | --- | --- |
+   | `brave`, `google cse`, `duckduckgo` | `filetype:pdf` |
+   | `yandex` | `mime:pdf` |
+
+   Si un grupo falla, sus motores aparecen en `unresponsive_engines` y la búsqueda sigue con los demás. Solo si fallan todos se devuelve error.
+3. Junta los resultados y elimina las URLs duplicadas.
 4. Verifica cada candidato en paralelo:
    - `HEAD`: si responde `200` con `content-type: application/pdf`, se acepta.
    - Si no es concluyente, hace un `GET` con `Range: bytes=0-1023` y busca la firma `%PDF-`.
@@ -97,6 +104,18 @@ El límite por IP usa el primer valor de `X-Forwarded-For`. Un cliente puede fal
 - **Bloqueos de bots**: algunos sitios bloquean peticiones que no vienen de un navegador; esos PDFs se descartan aunque existan.
 
 ## Decision Log
+
+### 2026-11-14 - Más motores: Yandex con mime:pdf
+
+- En producción solo respondía Brave: en esta versión de SearXNG, Google y Bing vienen desactivados, y Startpage y Mojeek inactivos.
+- Prueba motor por motor con `filetype:pdf` desde una IP residencial:
+  - **Brave y Google CSE**: 19 de 20 resultados eran PDF.
+  - **DuckDuckGo**: 10 de 10 cuando no pide CAPTCHA.
+  - **Bing**: ignora `filetype:`, `ext:` y la palabra `pdf`; 0 PDFs.
+  - **Yandex**: con `filetype:` dio 2 de 15 PDFs; con `mime:pdf`, 15 de 15.
+  - **Google (scraping directo), Qwant, Mojeek, Startpage, Yahoo y Yep**: bloquean a SearXNG ("access denied", CAPTCHA o error HTTP).
+- **Decisión:** dos grupos de motores en paralelo, cada uno con su operador. Se activó solo Yandex en `settings.yml`. Bing y los motores bloqueados no se activaron, porque solo sumarían enlaces descartados, avisos y tiempos de espera.
+- **Resultado medido:** de 37 a 45 PDFs verificados por búsqueda (antes unos 27), en 6 a 10 s.
 
 ### 2026-11-14 - Despliegue en Render con un solo contenedor
 

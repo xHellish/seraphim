@@ -28,3 +28,10 @@ server:
   # El acceso lo controla el servidor Node; el limiter necesita Valkey/Redis
   limiter: false
   image_proxy: false
+
+# Yandex viene apagado por defecto; entiende "mime:pdf" y da resultados de PDF reales.
+# Probados y descartados (2026-11-14): Bing ignora filetype; Google, Qwant, Mojeek,
+# Startpage y Yahoo bloquean a SearXNG con "access denied", CAPTCHA o error HTTP.
+engines:
+  - name: yandex
+    disabled: false

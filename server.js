@@ -42,6 +42,12 @@ const DOWNLOAD_TIMEOUT_MS = 120000;
 const PDF_SNIFF_BYTES = 1024;
 const USER_AGENT = "Mozilla/5.0 (compatible; SeraphimVision/1.0; PDF search)";
 
+// Grupos de motores y el operador de PDF que entiende cada uno
+const ENGINE_GROUPS = [
+  { engines: "brave,google cse,duckduckgo", pdf_operator: "filetype:pdf" },
+  { engines: "yandex", pdf_operator: "mime:pdf" },
+];
+
 const LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
 
 const MIME_TYPES = {
@@ -350,22 +356,22 @@ async function verify_pdf(url) {
 // SearXNG search
 // ---------------------------------------------
 
-// Quita operadores filetype: del usuario y fuerza filetype:pdf
-function build_pdf_query(query) {
-  const clean_query = query.replace(/\bfiletype:\S+/gi, " ").replace(/\s+/g, " ").trim();
+// Quita operadores de tipo de archivo que escriba el usuario
+function clean_user_query(query) {
+  const clean_query = query.replace(/\b(filetype|mime|ext):\S+/gi, " ").replace(/\s+/g, " ").trim();
   if (clean_query === "") {
     throw new HttpError(400, "Query must contain search terms besides filetype:");
   }
-  return `${clean_query} filetype:pdf`;
+  return clean_query;
 }
 
-// Pide una página de resultados a SearXNG
-async function fetch_searxng_results(query, page) {
+// Pide una página de resultados a SearXNG para un grupo de motores
+async function fetch_searxng_results(clean_query, page, engine_group) {
   const params = new URLSearchParams({
-    q: build_pdf_query(query),
+    q: `${clean_query} ${engine_group.pdf_operator}`,
     format: "json",
     pageno: String(page),
-    categories: "general",
+    engines: engine_group.engines,
     safesearch: "0",
   });
   const search_url = `${SEARXNG_URL}/search?${params}`;
@@ -391,9 +397,40 @@ async function fetch_searxng_results(query, page) {
 
 // Busca PDFs, elimina duplicados y verifica cada enlace
 async function search_pdfs(query, page) {
-  // 1. Consultar SearXNG
-  const data = await fetch_searxng_results(query, page);
-  const raw_results = data.results || [];
+  // 1. Consultar SearXNG con cada grupo de motores en paralelo
+  const clean_query = clean_user_query(query);
+  const group_requests = [];
+  for (const engine_group of ENGINE_GROUPS) {
+    group_requests.push(fetch_searxng_results(clean_query, page, engine_group));
+  }
+  const group_outcomes = await Promise.allSettled(group_requests);
+
+  // Juntar resultados; si un grupo falla, se reporta y se sigue con los demás
+  const raw_results = [];
+  const unresponsive_engines = [];
+  let first_error = null;
+  let failed_groups = 0;
+  for (const [index, outcome] of group_outcomes.entries()) {
+    if (outcome.status === "rejected") {
+      log("warn", `Engine group "${ENGINE_GROUPS[index].engines}" failed: ${outcome.reason.message}`);
+      unresponsive_engines.push({ name: ENGINE_GROUPS[index].engines, error: outcome.reason.message });
+      failed_groups += 1;
+      if (first_error === null) {
+        first_error = outcome.reason;
+      }
+      continue;
+    }
+    for (const result of outcome.value.results || []) {
+      raw_results.push(result);
+    }
+    for (const entry of outcome.value.unresponsive_engines || []) {
+      unresponsive_engines.push({ name: entry[0], error: entry[1] });
+    }
+  }
+  // Si fallaron todos los grupos, devolver el error (por ejemplo SearXNG caído)
+  if (failed_groups === ENGINE_GROUPS.length) {
+    throw first_error;
+  }
 
   // 2. Quitar duplicados por URL
   const seen_urls = new Set();
@@ -429,12 +466,6 @@ async function search_pdfs(query, page) {
       engines: candidate.engines || [],
       size_bytes: verification.size_bytes,
     });
-  }
-
-  // 5. Motores que fallaron (CAPTCHA, timeout, etc.)
-  const unresponsive_engines = [];
-  for (const entry of data.unresponsive_engines || []) {
-    unresponsive_engines.push({ name: entry[0], error: entry[1] });
   }
 
   log("info", `Search "${query}" page ${page}: ${candidates.length} candidates, ${results.length} verified PDFs`);

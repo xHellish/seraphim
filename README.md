@@ -2,7 +2,7 @@
 
 Seraphim Vision is a free PDF search engine for the web. It works like the classic Google `filetype:pdf` operator: you type a topic and it returns only links that really serve a PDF file.
 
-Results come from [SearXNG](https://github.com/searxng/searxng), a free, open source metasearch engine that queries Brave, Google, Bing, DuckDuckGo and others. A small Node.js server forces `filetype:pdf`, checks every link and discards anything that is not a real PDF. Both run inside a single Docker container, so SearXNG is never exposed to the internet.
+Results come from [SearXNG](https://github.com/searxng/searxng), a free, open source metasearch engine. Seraphim Vision queries Brave, Google CSE, DuckDuckGo (with `filetype:pdf`) and Yandex (with `mime:pdf`) in parallel. A small Node.js server forces `filetype:pdf`, checks every link and discards anything that is not a real PDF. Both run inside a single Docker container, so SearXNG is never exposed to the internet.
 
 ## Features
 
