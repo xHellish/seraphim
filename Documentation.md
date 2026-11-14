@@ -60,11 +60,27 @@ Respuesta:
   "candidates": 5,
   "rejected": 3,
   "has_more": true,
-  "unresponsive_engines": [{ "name": "google", "error": "CAPTCHA" }]
+  "unresponsive_engines": [{ "name": "google", "error": "CAPTCHA" }],
+  "cached": false
 }
 ```
 
 `has_more` es verdadero mientras SearXNG devuelva candidatos (hasta la página 20). Una página puede traer 0 PDFs verificados y aun así tener más páginas.
+
+### Caché
+
+El servidor guarda en memoria dos tipos de datos:
+
+| Caché | Clave | Duración | Máximo |
+| --- | --- | --- | --- |
+| Búsquedas | consulta limpia en minúsculas + página | 60 min (`SEARCH_CACHE_TTL_MINUTES`); 10 min si el resultado es pobre | 500 entradas |
+| Verificación de PDFs | URL | 6 h si es PDF, 30 min si no lo es | 5000 entradas |
+
+- **Clave de búsqueda**: se le quitan los operadores y se normalizan espacios y mayúsculas, así que "Linear  Algebra", "linear algebra" y "linear algebra filetype:doc" comparten caché. `cached: true` en la respuesta indica que vino de la caché, y la interfaz lo muestra como "(cached)".
+- **Resultado pobre**: falló un grupo de motores completo o no hubo candidatos. Se guarda menos tiempo para no conservarlo una hora.
+- **Búsquedas simultáneas**: si llegan dos iguales a la vez, comparten la misma consulta a SearXNG (`searches_in_flight`).
+- **Expiración**: al llenarse, se descarta la entrada usada hace más tiempo (un `Map` reordenado en cada lectura).
+- **Sin persistencia**: la caché se pierde cuando el proceso se reinicia o Render duerme el servicio. `SEARCH_CACHE_TTL_MINUTES=0` desactiva la caché de búsquedas.
 
 ### `GET /api/download?url=<url>`
 
@@ -93,6 +109,7 @@ Descarga el PDF desde el origen y lo reenvía con `Content-Disposition: attachme
 | `SEARCH_LIMIT_PER_MINUTE` | `20` | Búsquedas por IP y minuto |
 | `DOWNLOAD_LIMIT_PER_MINUTE` | `10` | Descargas por IP y minuto |
 | `MAX_DOWNLOAD_BYTES` | `52428800` (50 MB) | Tamaño máximo que reenvía `/api/download` |
+| `SEARCH_CACHE_TTL_MINUTES` | `60` | Duración de la caché de búsquedas; `0` la desactiva |
 | `SEARXNG_SECRET` | sin valor por defecto | Clave de SearXNG; el contenedor no arranca sin ella |
 
 El límite por IP usa el primer valor de `X-Forwarded-For`. Un cliente puede falsificarlo para saltarse el límite; es una protección básica contra abuso, no una defensa fuerte.
@@ -104,6 +121,16 @@ El límite por IP usa el primer valor de `X-Forwarded-For`. Un cliente puede fal
 - **Bloqueos de bots**: algunos sitios bloquean peticiones que no vienen de un navegador; esos PDFs se descartan aunque existan.
 
 ## Decision Log
+
+### 2026-11-14 - Caché en memoria para búsquedas y verificaciones
+
+- Se eligió una caché en memoria dentro de `server.js` porque no necesita dependencias ni servicios extra.
+- **Descartado por ahora**: Redis/Valkey. Sobrevive a que Render duerma el servicio, pero añade un servicio y una librería cliente.
+- Se guardan también las verificaciones por URL, porque verificar es lo más lento y distintas búsquedas devuelven los mismos PDFs.
+- **Medido con SearXNG simulado:**
+  - una búsqueda repetida responde en menos de 10 ms;
+  - una búsqueda nueva con PDFs ya verificados baja de 1 s a 0,3 s;
+  - dos búsquedas iguales simultáneas generan una sola consulta.
 
 ### 2026-11-14 - Más motores: Yandex con mime:pdf
 

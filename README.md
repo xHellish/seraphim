@@ -11,6 +11,7 @@ Results come from [SearXNG](https://github.com/searxng/searxng), a free, open so
 - Open the PDF in a new tab or download it as an attachment
 - Pagination with "Load more"
 - Warning when a search engine is blocked (for example by a CAPTCHA)
+- In-memory cache: repeated searches answer instantly and known PDFs are not re-checked
 - Per-IP rate limiting and a download size limit
 - Responsive design
 

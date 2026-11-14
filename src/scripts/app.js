@@ -186,7 +186,11 @@ async function run_search(query, page) {
     if (search_state.shown_count === 0 && !data.has_more) {
       set_status(`No PDFs found for "${query}".`, "info");
     } else {
-      set_status(`${search_state.shown_count} verified PDFs for "${query}". Page ${page}: ${len_of(data.results)} PDFs, ${data.rejected} links discarded.`, "info");
+      let cache_note = "";
+      if (data.cached) {
+        cache_note = " (cached)";
+      }
+      set_status(`${search_state.shown_count} verified PDFs for "${query}". Page ${page}: ${len_of(data.results)} PDFs, ${data.rejected} links discarded${cache_note}.`, "info");
     }
 
     // 5. Mostrar "Load more" solo si el buscador trajo candidatos

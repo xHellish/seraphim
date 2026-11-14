@@ -31,6 +31,7 @@ const MAX_DOWNLOAD_BYTES = Number(process.env.MAX_DOWNLOAD_BYTES || String(50 * 
 const SEARCH_LIMIT_PER_MINUTE = Number(process.env.SEARCH_LIMIT_PER_MINUTE || "20");
 const DOWNLOAD_LIMIT_PER_MINUTE = Number(process.env.DOWNLOAD_LIMIT_PER_MINUTE || "10");
 const RATE_LIMIT_WINDOW_MS = 60000;
+const SEARCH_CACHE_TTL_MINUTES = Number(process.env.SEARCH_CACHE_TTL_MINUTES || "60");
 
 const STATIC_DIR = path.join(ROOT_DIR, "src");
 const MAX_QUERY_LENGTH = 200;
@@ -47,6 +48,15 @@ const ENGINE_GROUPS = [
   { engines: "brave,google cse,duckduckgo", pdf_operator: "filetype:pdf" },
   { engines: "yandex", pdf_operator: "mime:pdf" },
 ];
+
+// Caché en memoria (se pierde si el proceso se reinicia o Render lo duerme)
+const MINUTE_MS = 60 * 1000;
+const SEARCH_CACHE_TTL_MS = SEARCH_CACHE_TTL_MINUTES * MINUTE_MS;
+const DEGRADED_SEARCH_CACHE_TTL_MS = 10 * MINUTE_MS;
+const SEARCH_CACHE_MAX_ENTRIES = 500;
+const VERIFY_CACHE_PDF_TTL_MS = 6 * 60 * MINUTE_MS;
+const VERIFY_CACHE_NOT_PDF_TTL_MS = 30 * MINUTE_MS;
+const VERIFY_CACHE_MAX_ENTRIES = 5000;
 
 const LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
 
@@ -144,6 +154,46 @@ const rate_limit_cleanup = setInterval(() => {
   }
 }, RATE_LIMIT_WINDOW_MS);
 rate_limit_cleanup.unref();
+
+// =============================================
+// In-memory cache (expiración + límite de tamaño, se descarta lo más antiguo)
+// ---------------------------------------------
+
+// Crea una caché vacía; Map conserva el orden de inserción
+function create_cache(max_entries) {
+  return { entries: new Map(), max_entries };
+}
+
+// Devuelve el valor guardado o undefined si no existe o venció
+function cache_get(cache, key) {
+  const entry = cache.entries.get(key);
+  if (entry === undefined) {
+    return undefined;
+  }
+  if (Date.now() >= entry.expires_at) {
+    cache.entries.delete(key);
+    return undefined;
+  }
+  // Mover al final para que sea el último en descartarse
+  cache.entries.delete(key);
+  cache.entries.set(key, entry);
+  return entry.value;
+}
+
+// Guarda un valor con su tiempo de vida y descarta los más antiguos si sobra
+function cache_set(cache, key, value, ttl_ms) {
+  cache.entries.delete(key);
+  cache.entries.set(key, { value, expires_at: Date.now() + ttl_ms });
+  while (cache.entries.size > cache.max_entries) {
+    const oldest_key = cache.entries.keys().next().value;
+    cache.entries.delete(oldest_key);
+  }
+}
+
+const search_cache = create_cache(SEARCH_CACHE_MAX_ENTRIES);
+const verify_cache = create_cache(VERIFY_CACHE_MAX_ENTRIES);
+// Búsquedas en curso, para que dos peticiones iguales compartan el trabajo
+const searches_in_flight = new Map();
 
 // =============================================
 // URL safety (evita que el servidor consulte la red interna)
@@ -352,6 +402,21 @@ async function verify_pdf(url) {
   }
 }
 
+// Igual que verify_pdf, pero reutiliza resultados recientes de la misma URL
+async function verify_pdf_cached(url) {
+  const cached = cache_get(verify_cache, url);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const verification = await verify_pdf(url);
+  if (verification.is_pdf) {
+    cache_set(verify_cache, url, verification, VERIFY_CACHE_PDF_TTL_MS);
+  } else {
+    cache_set(verify_cache, url, verification, VERIFY_CACHE_NOT_PDF_TTL_MS);
+  }
+  return verification;
+}
+
 // =============================================
 // SearXNG search
 // ---------------------------------------------
@@ -395,10 +460,9 @@ async function fetch_searxng_results(clean_query, page, engine_group) {
   return response.json();
 }
 
-// Busca PDFs, elimina duplicados y verifica cada enlace
-async function search_pdfs(query, page) {
+// Busca PDFs, elimina duplicados y verifica cada enlace (sin caché de búsqueda)
+async function run_pdf_search(clean_query, page) {
   // 1. Consultar SearXNG con cada grupo de motores en paralelo
-  const clean_query = clean_user_query(query);
   const group_requests = [];
   for (const engine_group of ENGINE_GROUPS) {
     group_requests.push(fetch_searxng_results(clean_query, page, engine_group));
@@ -446,7 +510,7 @@ async function search_pdfs(query, page) {
   // 3. Verificar todos los candidatos en paralelo
   const verifications = [];
   for (const candidate of candidates) {
-    verifications.push(verify_pdf(candidate.url));
+    verifications.push(verify_pdf_cached(candidate.url));
   }
   const verification_results = await Promise.all(verifications);
 
@@ -468,16 +532,55 @@ async function search_pdfs(query, page) {
     });
   }
 
-  log("info", `Search "${query}" page ${page}: ${candidates.length} candidates, ${results.length} verified PDFs`);
+  log("info", `Search "${clean_query}" page ${page}: ${candidates.length} candidates, ${results.length} verified PDFs`);
   return {
-    query,
-    page,
-    results,
-    candidates: candidates.length,
-    rejected: candidates.length - results.length,
-    has_more: candidates.length > 0 && page < MAX_PAGE,
-    unresponsive_engines,
+    body: {
+      page,
+      results,
+      candidates: candidates.length,
+      rejected: candidates.length - results.length,
+      has_more: candidates.length > 0 && page < MAX_PAGE,
+      unresponsive_engines,
+    },
+    // Resultado pobre: falló un grupo entero o no hubo candidatos
+    is_degraded: failed_groups > 0 || candidates.length === 0,
   };
+}
+
+// Busca PDFs usando la caché; búsquedas iguales en curso comparten el trabajo
+async function search_pdfs(query, page) {
+  // 1. Clave normalizada: sin operadores, espacios simples y minúsculas
+  const clean_query = clean_user_query(query);
+  const cache_key = `${clean_query.toLowerCase()}|${page}`;
+
+  // 2. Respuesta guardada
+  const cached_body = cache_get(search_cache, cache_key);
+  if (cached_body !== undefined) {
+    log("info", `Cache hit for "${clean_query}" page ${page}`);
+    return { ...cached_body, query, cached: true };
+  }
+
+  // 3. Misma búsqueda ya en curso: esperar su resultado
+  let search_promise = searches_in_flight.get(cache_key);
+  if (search_promise === undefined) {
+    search_promise = run_pdf_search(clean_query, page);
+    searches_in_flight.set(cache_key, search_promise);
+  }
+
+  try {
+    // 4. Buscar y guardar (menos tiempo si el resultado es pobre)
+    const outcome = await search_promise;
+    let ttl_ms = SEARCH_CACHE_TTL_MS;
+    if (outcome.is_degraded) {
+      ttl_ms = Math.min(SEARCH_CACHE_TTL_MS, DEGRADED_SEARCH_CACHE_TTL_MS);
+    }
+    if (ttl_ms > 0) {
+      cache_set(search_cache, cache_key, outcome.body, ttl_ms);
+    }
+    return { ...outcome.body, query, cached: false };
+  } finally {
+    searches_in_flight.delete(cache_key);
+  }
 }
 
 // =============================================
