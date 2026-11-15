@@ -187,7 +187,7 @@ El límite por IP usa el primer valor de `X-Forwarded-For`. Un cliente puede fal
 - **Logo "Seraphim vision"** con v minúscula, porque BitPap dibuja la V mayúscula como U. El título de la pestaña del navegador sí usa "Seraphim Vision".
 - **Dígito 0 desde una fuente del sistema** en los resultados y la terminal (ver el apartado del frontend). Es la única desviación de "BitPap para todo".
 - **Pendiente: licencia de BitPap.** El kit avisa que la fuente no traía archivo de licencia y que hay que revisarla antes de publicarla en sitios nuevos. La fuente ya se sirve desde este repo.
-- **Logo SVG** nuevo en pixel art (lupa cian con mango dorado), usado como favicon.
+- **Logo SVG** en pixel art (`src/assets/logo.svg`), usado como favicon. Está dibujado en una cuadrícula de 16 por 16 con `shape-rendering="crispEdges"`, así que a 16 px cada unidad es exactamente un píxel. Lleva los elementos del kit: marco cian con esquinas en escalón (arriba a la izquierda y abajo a la derecha), cara oscura `#0F0A1A`, hoja de PDF con la esquina doblada y renglones violeta, lupa cian con reflejo y mango dorado que rompe el marco, y una pista de circuito con pad naranja abajo a la izquierda. Safari no soporta favicons SVG; si hiciera falta, habría que agregar un PNG.
 - **Sin menú lateral ni sección About.** Se prefirió la estructura de buscador centrado: la portada queda en el centro de la pantalla y los resultados siguen en una columna centrada. Para volver a la portada hay un enlace "< home" sobre el título de los resultados. El glitch del logo suena al entrar a la portada.
 
 ### 2026-11-14 - Rediseño minimalista (reemplazado por el estilo AXM)

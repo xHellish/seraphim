@@ -1,19 +1,36 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <rect width="16" height="16" fill="#0F0A1A"/>
-  <g fill="#00D9FF">
-    <rect x="4" y="2" width="4" height="1"/>
-    <rect x="3" y="3" width="1" height="1"/>
-    <rect x="8" y="3" width="1" height="1"/>
-    <rect x="2" y="4" width="1" height="4"/>
-    <rect x="9" y="4" width="1" height="4"/>
-    <rect x="3" y="8" width="1" height="1"/>
-    <rect x="8" y="8" width="1" height="1"/>
-    <rect x="4" y="9" width="4" height="1"/>
-  </g>
-  <rect x="4" y="4" width="2" height="1" fill="#F07AD9"/>
-  <g fill="#FFCC59">
-    <rect x="9" y="9" width="2" height="2"/>
-    <rect x="11" y="11" width="2" height="2"/>
-    <rect x="13" y="13" width="1" height="1"/>
-  </g>
+  <!-- Marco en escalón (arriba a la izquierda y abajo a la derecha) con cara oscura -->
+  <path fill="#00D9FF" d="M0 2h1V1h1V0h14v14h-1v1h-1v1H0z"/>
+  <path fill="#0F0A1A" d="M1 3h1V2h1V1h12v12h-1v1h-1v1H1z"/>
+
+  <!-- Hoja de PDF con la esquina doblada y renglones de texto -->
+  <rect x="3" y="3" width="6" height="10" fill="#E9E6FF"/>
+  <rect x="7" y="3" width="2" height="1" fill="#0F0A1A"/>
+  <rect x="8" y="4" width="1" height="1" fill="#0F0A1A"/>
+  <rect x="7" y="4" width="1" height="1" fill="#9E73F2"/>
+  <rect x="4" y="5" width="3" height="1" fill="#9E73F2"/>
+  <rect x="4" y="7" width="3" height="1" fill="#9E73F2"/>
+  <rect x="4" y="9" width="2" height="1" fill="#9E73F2"/>
+  <rect x="4" y="11" width="3" height="1" fill="#9E73F2"/>
+
+  <!-- Lupa: cristal oscuro, aro cian y reflejo -->
+  <path fill="#0B1622" d="M9 7h3v1h1v3h-1v1H9v-1H8V8h1z"/>
+  <rect x="9" y="6" width="3" height="1" fill="#00D9FF"/>
+  <rect x="8" y="7" width="1" height="1" fill="#00D9FF"/>
+  <rect x="12" y="7" width="1" height="1" fill="#00D9FF"/>
+  <rect x="7" y="8" width="1" height="3" fill="#00D9FF"/>
+  <rect x="13" y="8" width="1" height="3" fill="#00D9FF"/>
+  <rect x="8" y="11" width="1" height="1" fill="#00D9FF"/>
+  <rect x="12" y="11" width="1" height="1" fill="#00D9FF"/>
+  <rect x="9" y="12" width="3" height="1" fill="#00D9FF"/>
+  <rect x="9" y="8" width="1" height="2" fill="#B2FFFF"/>
+  <rect x="10" y="10" width="2" height="1" fill="#F07AD9"/>
+
+  <!-- Mango dorado que rompe el marco -->
+  <rect x="12" y="12" width="2" height="2" fill="#FFCC59"/>
+  <rect x="14" y="14" width="1" height="1" fill="#FFCC59"/>
+
+  <!-- Pista de circuito con pad naranja -->
+  <rect x="3" y="14" width="4" height="1" fill="#0099D9"/>
+  <rect x="2" y="14" width="1" height="1" fill="#FF8026"/>
 </svg>
