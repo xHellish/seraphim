@@ -21,6 +21,8 @@ const load_more_button = document.getElementById("load-more-button");
 const load_more_label = load_more_button.querySelector(".ax_face > span");
 const home_link = document.getElementById("home-link");
 const home_logo = document.querySelector(".sv_logo");
+const type_tabs = document.querySelectorAll(".sv_tab");
+const language_select = document.getElementById("language-select");
 
 // =============================================
 // Constants and state
@@ -36,6 +38,17 @@ const SCANNING_TEXT = "Scanning";
 // Motores que consulta el servidor (ENGINE_GROUPS en server.js), para el log de progreso
 const SEARCH_ENGINES = ["brave", "google cse", "duckduckgo", "yandex"];
 
+// Fuentes de cada pestaña (TEXT_TYPES en server.js) e idiomas del filtro (LANGUAGES en server.js)
+const TYPE_SOURCES = {
+  all: ["web", "archive", "arxiv"],
+  books: ["archive"],
+  papers: ["arxiv"],
+  web: ["web"],
+};
+const LANGUAGE_CODES = ["any", "en", "es", "fr", "de", "pt", "it"];
+const DEFAULT_TYPE = "all";
+const DEFAULT_LANGUAGE = "any";
+
 // Ritmo de la animación de progreso
 const STAGE_INTERVAL_MS = 450;
 const SCAN_TICK_MS = 110;
@@ -48,6 +61,8 @@ const RESULT_REVEAL_MAX_STEPS = 8;
 const search_state = {
   query: "",
   page: 1,
+  type: DEFAULT_TYPE,
+  language: DEFAULT_LANGUAGE,
   is_loading: false,
   shown_count: 0,
   // Identifica la búsqueda actual para ignorar respuestas viejas
@@ -278,12 +293,33 @@ function build_progress_stages(query, is_new_search) {
   } else {
     stages.push({ kind: "info", text: "> load more" });
   }
-  stages.push({ kind: "gen", text: "connecting to engines ......" });
-  for (const engine_name of SEARCH_ENGINES) {
-    stages.push({ kind: "gen", text: `[${engine_name}] querying ...` });
+  if (search_state.language !== DEFAULT_LANGUAGE) {
+    stages.push({ kind: "dim", text: `filters: ${search_state.type}, lang ${search_state.language}` });
+  } else {
+    stages.push({ kind: "dim", text: `filters: ${search_state.type}` });
   }
-  stages.push({ kind: "gen", text: "merging results ......" });
-  stages.push({ kind: "gen", text: "checking links, real pdfs only ......" });
+  stages.push({ kind: "gen", text: "connecting to sources ......" });
+
+  // Una línea por cada fuente de la pestaña, en el orden en que el servidor las consulta
+  const sources = TYPE_SOURCES[search_state.type];
+  if (sources.includes("web")) {
+    for (const engine_name of SEARCH_ENGINES) {
+      stages.push({ kind: "gen", text: `[${engine_name}] querying ...` });
+    }
+  }
+  if (sources.includes("archive")) {
+    stages.push({ kind: "gen", text: "[internet archive] querying ..." });
+    stages.push({ kind: "gen", text: "[internet archive] finding public pdf files ..." });
+  }
+  if (sources.includes("arxiv")) {
+    stages.push({ kind: "gen", text: "[arxiv] querying ..." });
+  }
+  if (len_of(sources) > 1) {
+    stages.push({ kind: "gen", text: "merging results ......" });
+  }
+  if (sources.includes("web")) {
+    stages.push({ kind: "gen", text: "checking links, real pdfs only ......" });
+  }
   return stages;
 }
 
@@ -314,7 +350,7 @@ function start_progress(query, is_new_search) {
       stage_index += 1;
     } else if (!has_waiting_line) {
       // Si el servidor tarda más que las etapas, se avisa que sigue trabajando
-      status_body.insertBefore(create_element("p", "ax_term_warn", "waiting for slow engines ......"), scan_paragraph);
+      status_body.insertBefore(create_element("p", "ax_term_warn", "waiting for slow sources ......"), scan_paragraph);
       has_waiting_line = true;
       clearInterval(progress_state.stage_timer);
       progress_state.stage_timer = null;
@@ -412,6 +448,11 @@ function create_result_item(result, parsed_url, result_number) {
   }
   main.appendChild(create_element("p", "sv_result_path", path_text));
 
+  // 3b. Año y autores, cuando la fuente los da (Archive y arXiv)
+  if (result.details) {
+    main.appendChild(create_element("p", "sv_result_details", result.details));
+  }
+
   // 4. Fragmento de texto
   if (result.snippet) {
     main.appendChild(create_element("p", "ax_card_desc sv_result_snippet", result.snippet));
@@ -500,11 +541,11 @@ function format_elapsed(elapsed_ms) {
 function build_summary_lines(data, elapsed_ms) {
   const lines = [];
   if (search_state.shown_count === 0 && !data.has_more) {
-    lines.push({ kind: "warn", text: "[warn] no pdfs found, try other words" });
+    lines.push({ kind: "warn", text: "[warn] no texts found, try other words or filters" });
   } else if (search_state.shown_count === 0) {
-    lines.push({ kind: "warn", text: "[warn] no pdfs on this page, load more" });
+    lines.push({ kind: "warn", text: "[warn] no texts on this page, load more" });
   } else {
-    lines.push({ kind: "gen", text: `found: ${search_state.shown_count} pdfs [OK]` });
+    lines.push({ kind: "gen", text: `found: ${search_state.shown_count} texts [OK]` });
   }
   let time_text = `time: ${format_elapsed(elapsed_ms)}`;
   if (data.cached) {
@@ -513,7 +554,13 @@ function build_summary_lines(data, elapsed_ms) {
   lines.push({ kind: "gen", text: time_text });
   const engine_names = get_engine_names(data.unresponsive_engines);
   if (len_of(engine_names) > 0) {
-    lines.push({ kind: "warn", text: `[warn] engines down: ${engine_names.join(", ")}` });
+    lines.push({ kind: "warn", text: `[warn] sources down: ${engine_names.join(", ")}` });
+  }
+  // Avisos del servidor, por ejemplo un filtro que una fuente no soporta
+  if (Array.isArray(data.notices)) {
+    for (const notice of data.notices) {
+      lines.push({ kind: "dim", text: `[info] ${notice}` });
+    }
   }
   lines.push({ kind: "info", text: "ready" });
   return lines;
@@ -529,7 +576,7 @@ async function run_search(query, page) {
 
   try {
     // 2. Llamar a la API propia
-    const params = new URLSearchParams({ q: query, page: String(page) });
+    const params = new URLSearchParams({ q: query, page: String(page), type: search_state.type, lang: search_state.language });
     const response = await fetch(`/api/search?${params}`);
     const data = await response.json();
     if (!response.ok) {
@@ -580,7 +627,7 @@ function start_search(query, update_url) {
   search_input.value = query;
   document.title = `${query} - Seraphim Vision`;
   if (update_url) {
-    history.pushState({ query }, "", `/?${new URLSearchParams({ q: query })}`);
+    history.pushState({ query }, "", build_page_url(query));
   }
 
   // 3. Cambiar a resultados; el glitch solo suena al entrar desde la portada
@@ -613,9 +660,55 @@ function show_home(update_url) {
   search_input.focus();
 }
 
-// Lee ?q= de la URL y muestra la vista correspondiente
+// Arma la URL de la página con la búsqueda y los filtros que no son los de por defecto
+function build_page_url(query) {
+  const params = new URLSearchParams({ q: query });
+  if (search_state.type !== DEFAULT_TYPE) {
+    params.set("type", search_state.type);
+  }
+  if (search_state.language !== DEFAULT_LANGUAGE) {
+    params.set("lang", search_state.language);
+  }
+  return `/?${params}`;
+}
+
+// Aplica el tipo y el idioma al estado y a los controles; valores desconocidos vuelven al de por defecto
+function set_filters(text_type, language) {
+  // 1. Validar contra las opciones conocidas
+  let clean_type = DEFAULT_TYPE;
+  if (Object.hasOwn(TYPE_SOURCES, text_type)) {
+    clean_type = text_type;
+  }
+  let clean_language = DEFAULT_LANGUAGE;
+  if (LANGUAGE_CODES.includes(language)) {
+    clean_language = language;
+  }
+  search_state.type = clean_type;
+  search_state.language = clean_language;
+
+  // 2. Marcar la pestaña activa y el idioma elegido
+  for (const tab of type_tabs) {
+    if (tab.dataset.type === clean_type) {
+      tab.setAttribute("aria-pressed", "true");
+    } else {
+      tab.setAttribute("aria-pressed", "false");
+    }
+  }
+  language_select.value = clean_language;
+}
+
+// Si hay una búsqueda en pantalla, la repite con los filtros nuevos
+function rerun_with_filters() {
+  if (document.body.classList.contains("is_results") && search_state.query !== "") {
+    start_search(search_state.query, true);
+  }
+}
+
+// Lee ?q=, ?type= y ?lang= de la URL y muestra la vista correspondiente
 function load_from_url() {
-  const query = (new URLSearchParams(window.location.search).get("q") || "").trim();
+  const url_params = new URLSearchParams(window.location.search);
+  set_filters(url_params.get("type") || DEFAULT_TYPE, url_params.get("lang") || DEFAULT_LANGUAGE);
+  const query = (url_params.get("q") || "").trim();
   if (query === "") {
     show_home(false);
   } else {
@@ -645,6 +738,23 @@ load_more_button.addEventListener("click", () => {
   }
   search_state.page += 1;
   run_search(search_state.query, search_state.page);
+});
+
+// Pestañas de tipo de texto: cambian el filtro y repiten la búsqueda en pantalla
+for (const tab of type_tabs) {
+  tab.addEventListener("click", () => {
+    if (tab.dataset.type === search_state.type) {
+      return;
+    }
+    set_filters(tab.dataset.type, search_state.language);
+    rerun_with_filters();
+  });
+}
+
+// Filtro de idioma
+language_select.addEventListener("change", () => {
+  set_filters(search_state.type, language_select.value);
+  rerun_with_filters();
 });
 
 // Búsquedas de ejemplo en la portada

@@ -170,6 +170,81 @@ body.is_home #search {
 }
 
 /* =============================================
+   Filtros: pestañas de tipo de texto e idioma
+   --------------------------------------------- */
+.sv_filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    max-width: 780px;
+    margin: 16px auto 0;
+}
+
+.sv_tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Violeta la inactiva y cian la activa, como el menú del kit */
+.sv_tab {
+    --accent: var(--violet_menu);
+    color: var(--text_muted);
+}
+
+.sv_tab[aria-pressed="true"] {
+    --accent: var(--cyan);
+    color: #ffffff;
+}
+
+.sv_tab[aria-pressed="true"] span {
+    text-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 70%, transparent);
+}
+
+.sv_select_frame {
+    --accent: var(--violet_menu);
+}
+
+.sv_select_frame:focus-within {
+    filter: brightness(1.25);
+}
+
+.sv_select_face {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 12px;
+}
+
+.sv_select_face::after {
+    display: none;
+}
+
+.sv_select_label {
+    font-size: 1.3rem;
+    color: var(--text_muted);
+}
+
+#language-select {
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-pixel);
+    font-size: 1.4rem;
+    letter-spacing: 1px;
+    cursor: pointer;
+}
+
+/* Las opciones del menú desplegable usan los colores del sistema: se fuerza fondo oscuro */
+#language-select option {
+    background: var(--face);
+    color: var(--text);
+}
+
+/* =============================================
    Sugerencias
    --------------------------------------------- */
 .sv_suggestions {
@@ -352,6 +427,15 @@ body.is_searching .sv_search_frame {
     font-size: 1.2rem;
     letter-spacing: 1px;
     color: var(--text_muted);
+    overflow-wrap: anywhere;
+}
+
+/* Año y autores (Archive y arXiv) */
+.sv_result_details {
+    margin: -4px 0 10px;
+    font-size: 1.2rem;
+    letter-spacing: 1px;
+    color: var(--accent);
     overflow-wrap: anywhere;
 }
 

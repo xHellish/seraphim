@@ -2,18 +2,58 @@
 
 ## Objetivo
 
-Buscador gratuito de PDFs en la web, equivalente al operador `filetype:pdf` de Google, sin depender de APIs de pago.
+Buscador gratuito de textos de todo tipo (libros, artículos, documentos y PDFs de la web), sin depender de APIs de pago. Solo devuelve enlaces que sirven un PDF.
 
 ## Arquitectura
 
 ```
                      Contenedor Docker (Render, plan free)
                     +------------------------------------------------+
-Navegador  ->  :PORT | server.js (Node)  ->  127.0.0.1:8080 SearXNG    | ->  Brave, Google, Bing, DuckDuckGo...
+Navegador  ->  :PORT | server.js (Node)  ->  127.0.0.1:8080 SearXNG    | ->  Brave, Google CSE, DuckDuckGo, Yandex
                     |       |                                        |
                     +-------|----------------------------------------+
-                            +-> verificación de cada enlace (HEAD / GET parcial)
+                            +-> verificación de cada enlace web (HEAD / GET parcial)
+                            +-> archive.org (búsqueda avanzada + lista de archivos)
+                            +-> export.arxiv.org (API Atom)
 ```
+
+## Fuentes y pestañas
+
+Cada pestaña del buscador consulta un conjunto de fuentes (`TEXT_TYPES` en `server.js`):
+
+| Pestaña | Fuentes | Qué trae |
+| --- | --- | --- |
+| All | web, archive, arxiv | Las tres en paralelo, mezcladas alternando un resultado de cada una |
+| Books | archive | Libros y documentos de Internet Archive con PDF público |
+| Papers | arxiv | Artículos científicos de arXiv |
+| Web | web | PDFs de la web con SearXNG (el buscador original) |
+
+- **Si una fuente falla**, sus resultados faltan y aparece en `unresponsive_engines` con el nombre `web`, `internet archive` o `arxiv`. Solo si fallan todas se devuelve error.
+- **Listas duplicadas**: las fuentes de cada pestaña y los idiomas están en `server.js` (`TEXT_TYPES`, `LANGUAGES`) y en `app.js` (`TYPE_SOURCES`, `LANGUAGE_CODES`), que las usa para validar la URL y escribir las etapas del log. Si se cambia una, hay que cambiar la otra.
+
+### Internet Archive
+
+1. Búsqueda avanzada (`/advancedsearch.php`) con `mediatype:texts`, formato `Text PDF` o `Image Container PDF`, y sin las colecciones de préstamo (`inlibrary`, `printdisabled`, `lendinglibrary`) ni ítems con acceso restringido. Sus PDFs no son públicos.
+2. Por cada documento, pide su lista de archivos (`/metadata/<id>/files`) y elige un PDF que no sea privado. Prefiere `Text PDF`, luego `Image Container PDF` y luego `Additional Text PDF`, y dentro de cada formato el original sobre el derivado.
+3. El PDF se enlaza como `https://archive.org/download/<id>/<archivo>`. Como la metadata ya confirma que es un PDF, se guarda en la caché de verificación y las miniaturas no vuelven a comprobarlo.
+
+- **Caché de archivos**: la elección de cada documento se guarda 6 h (`archive_files_cache`, 2000 entradas). Sin caché, una página de Books tarda unos 10 s (20 peticiones de metadata en paralelo); con caché, menos de 1 s.
+- **Consulta**: se quitan los caracteres especiales de Lucene (`sanitize_lucene_query`) para que una búsqueda con `:` o paréntesis no rompa la sintaxis.
+
+### arXiv
+
+- API Atom en `export.arxiv.org/api/query`. Cada palabra (o frase entre comillas) se busca con `all:` y se unen con `AND`. El XML se lee con expresiones regulares (título, resumen, autores, fecha y el enlace `title="pdf"`), sin librerías.
+- **Ritmo**: arXiv pide no más de una consulta cada 3 segundos. El servidor las pone en fila (`wait_for_arxiv_slot`).
+- **Pausa tras un bloqueo**: si arXiv responde 429 o no contesta en 20 s, se salta durante 2 minutos (`ARXIV_COOLDOWN_MS`) y responde al instante con el aviso, en lugar de hacer esperar cada búsqueda.
+- **Sin filtro de idioma**: arXiv no lo permite. Si hay un idioma elegido, la respuesta trae un aviso en `notices` y la terminal lo muestra.
+
+### Filtro de idioma
+
+| Fuente | Cómo se aplica |
+| --- | --- |
+| Web | Parámetro `language` de SearXNG (`es`, `en`...) |
+| Books | Campo `language` de Archive, con sus variantes (`spa`, `Spanish`, `Español`), porque cada documento lo escribe distinto |
+| Papers | No se aplica (aviso en `notices`) |
 
 ## Despliegue
 
@@ -31,10 +71,12 @@ Navegador  ->  :PORT | server.js (Node)  ->  127.0.0.1:8080 SearXNG    | ->  Bra
   - **Estilo AXM**: es el kit del portafolio (`axm-web-style`), basado en la UI del juego AGI x Machina: pixel art, fondo de placa de circuitos, cartas con marco en escalón, ventanas con corchetes y terminales CRT. Sus archivos se copiaron sin modificar a `css/axm.css`, `js/axm.js` y `assets/` (fuente, fondos y cursores).
   - **Estilos propios**: `styles/main.css` solo añade lo que el kit no trae (barra de búsqueda, resultados y el layout centrado). Para actualizar el kit basta con reemplazar los tres archivos de arriba.
   - **Cursor del sistema**: el kit cambia el cursor por flechas y manos pixel art (`assets/cursors/`). `main.css` lo devuelve al cursor normal del navegador (`auto` en la página y `pointer` en enlaces y botones). Los archivos de los cursores siguen en `assets/` para no modificar el kit.
+  - **Filtros** (`.sv_filters`, debajo de la barra): pestañas All, Books, Papers y Web, y un selector de idioma. Son botones del kit con `aria-pressed`: violeta la inactiva y cian la activa, como el menú de `axm.css`. Si hay una búsqueda en pantalla, cambiar un filtro la repite. Se guardan en la URL (`&type=` y `&lang=`) solo si no son los de por defecto.
+  - **Cartas de Books y Papers**: debajo del dominio llevan una línea con el año y los autores (`.sv_result_details`, en el color de la carta).
   - **Sin barra lateral**: la página es una sola columna centrada. Como el kit reserva el espacio de `.ax_sidebar` en `.ax_main`, `main.css` lo anula (`margin-left: 0`). `axm.js` no necesita botones de navegación: si no hay `data-section`, su navegación no hace nada.
   - **Dos vistas dentro de Search**: portada (logo, barra y sugerencias) y resultados (título RESULTS, terminal de estado y cartas). Es el mismo DOM; cambia solo la clase del `body` (`is_home` o `is_results`).
   - **Terminal de estado**: una terminal CRT de altura fija que escribe un log y baja sola, como una terminal real: `> search "..."`, `found`, `time`, `(cache)`, motores caídos y errores. Las líneas del resumen se agregan al mismo log; "Load more" lo continúa y una búsqueda nueva lo limpia.
-  - **Animación de espera** (`start_progress` en `app.js`): mientras llega la respuesta, el log escribe una etapa cada 450 ms (conectar, consultar cada motor, unir resultados, verificar enlaces) y una barra de escaneo `[..####....]` va y viene. Si el servidor tarda más que las etapas, aparece `waiting for slow engines`. El servidor no emite progreso real: las etapas reflejan lo que hace pero son temporizadas, y la lista de motores está duplicada en `SEARCH_ENGINES` (`app.js`) y `ENGINE_GROUPS` (`server.js`).
+  - **Animación de espera** (`start_progress` en `app.js`): mientras llega la respuesta, el log escribe una etapa cada 450 ms (conectar, consultar cada motor, unir resultados, verificar enlaces) y una barra de escaneo `[..####....]` va y viene. Si el servidor tarda más que las etapas, aparece `waiting for slow engines`. El servidor no emite progreso real: las etapas reflejan lo que hace pero son temporizadas, y la lista de motores está duplicada en `SEARCH_ENGINES` (`app.js`) y `ENGINE_GROUPS` (`server.js`). Las etapas dependen de la pestaña: solo aparecen las fuentes que se consultan, y la primera línea muestra los filtros. Los avisos del servidor (`notices`) se escriben como `[info]` al final.
   - **Miniatura de la primera página** (`scripts/thumbnails.js`): cada carta tiene a la izquierda un recuadro con el marco en escalón del color de la carta (en móvil pasa arriba de los datos). Es un enlace al PDF original. La imagen la dibuja pdf.js en el navegador del visitante:
     - **Carga diferida**: un `IntersectionObserver` la pide cuando la carta está a 300 px de la pantalla, con un máximo de 3 a la vez. Las cartas que nunca se ven no gastan tráfico. Un salto de scroll que pasa de largo una carta tampoco la pide. Al empezar otra búsqueda se vacía la cola (`clear_thumbnails`).
     - **Solo los trozos necesarios**: pdf.js se alimenta con un `PDFDataRangeTransport` propio que pide trozos de 64 KB a `/api/pdf`. Con `disableAutoFetch` no baja el resto del archivo. En las pruebas, un PDF de 2,1 MB gastó unos 750 KB (35 %) y uno de 757 KB gastó unos 310 KB (41 %).
@@ -58,7 +100,9 @@ Navegador  ->  :PORT | server.js (Node)  ->  127.0.0.1:8080 SearXNG    | ->  Bra
 
 ## Endpoints
 
-### `GET /api/search?q=<texto>&page=<1-20>`
+### `GET /api/search?q=<texto>&page=<1-20>&type=<all|books|papers|web>&lang=<any|en|es|fr|de|pt|it>`
+
+`type` es `all` por defecto y `lang` es `any`. Con un valor desconocido responde 400. El servidor consulta en paralelo las fuentes del tipo (ver "Fuentes y pestañas"). La fuente Web hace esto:
 
 1. Quita los operadores `filetype:`, `mime:` y `ext:` que escriba el usuario.
 2. Consulta SearXNG en paralelo, una vez por cada grupo de motores (`ENGINE_GROUPS` en `server.js`), con el operador que entiende ese grupo:
@@ -81,16 +125,20 @@ Respuesta:
 {
   "query": "machine learning",
   "page": 1,
-  "results": [{ "title": "", "url": "", "domain": "", "snippet": "", "engines": [], "size_bytes": 13264 }],
+  "type": "all",
+  "language": "any",
+  "results": [{ "source": "archive", "title": "", "url": "", "domain": "", "snippet": "", "details": "1980 // L. I. Golovina", "engines": [], "size_bytes": 13264 }],
   "candidates": 5,
   "rejected": 3,
   "has_more": true,
   "unresponsive_engines": [{ "name": "google", "error": "CAPTCHA" }],
+  "notices": ["arxiv: language filter not supported, showing all languages"],
   "cached": false
 }
 ```
 
-`has_more` es verdadero mientras SearXNG devuelva candidatos (hasta la página 20). Una página puede traer 0 PDFs verificados y aun así tener más páginas.
+- `source` es `web`, `archive` o `arxiv`. `details` lleva el año y hasta tres autores (vacío en Web).
+- `has_more` es verdadero si alguna fuente tiene más páginas (hasta la 20): Web mientras SearXNG devuelva candidatos, y Archive y arXiv según el total que informan. Una página puede traer 0 PDFs y aun así tener más páginas.
 
 ### Caché
 
@@ -98,11 +146,12 @@ El servidor guarda en memoria dos tipos de datos:
 
 | Caché | Clave | Duración | Máximo |
 | --- | --- | --- | --- |
-| Búsquedas | consulta limpia en minúsculas + página | 60 min (`SEARCH_CACHE_TTL_MINUTES`); 10 min si el resultado es pobre | 500 entradas |
+| Búsquedas | tipo + idioma + consulta limpia en minúsculas + página | 60 min (`SEARCH_CACHE_TTL_MINUTES`); 10 min si el resultado es pobre | 500 entradas |
 | Verificación de PDFs | URL | 6 h si es PDF, 30 min si no lo es | 5000 entradas |
+| PDF de cada documento de Archive | identificador | 6 h | 2000 entradas |
 
 - **Clave de búsqueda**: se le quitan los operadores y se normalizan espacios y mayúsculas, así que "Linear  Algebra", "linear algebra" y "linear algebra filetype:doc" comparten caché. `cached: true` en la respuesta indica que vino de la caché, y la interfaz lo muestra como "(cached)".
-- **Resultado pobre**: falló un grupo de motores completo o no hubo candidatos. Se guarda menos tiempo para no conservarlo una hora.
+- **Resultado pobre**: falló una fuente o un grupo de motores completo, o alguna fuente no trajo candidatos. Se guarda menos tiempo para no conservarlo una hora.
 - **Búsquedas simultáneas**: si llegan dos iguales a la vez, comparten la misma consulta a SearXNG (`searches_in_flight`).
 - **Expiración**: al llenarse, se descarta la entrada usada hace más tiempo (un `Map` reordenado en cada lectura).
 - **Sin persistencia**: la caché se pierde cuando el proceso se reinicia o Render duerme el servicio. `SEARCH_CACHE_TTL_MINUTES=0` desactiva la caché de búsquedas.
@@ -156,8 +205,23 @@ El límite por IP usa el primer valor de `X-Forwarded-For`. Un cliente puede fal
 - **Bloqueos por CAPTCHA**: los motores (sobre todo Google) bloquean las IPs de centros de datos. Si SearXNG corre en la nube, Google suele fallar y quedan Bing, DuckDuckGo y otros. La interfaz avisa qué motores no respondieron.
 - **Lentitud**: verificar enlaces suma entre 1 y 6 segundos por página (`VERIFY_TIMEOUT_MS`).
 - **Bloqueos de bots**: algunos sitios bloquean peticiones que no vienen de un navegador; esos PDFs se descartan aunque existan.
+- **arXiv limita mucho**: con unas pocas consultas seguidas responde 429 durante varios minutos. Durante las pruebas bloqueó la IP residencial de desarrollo, así que **la fuente Papers no se pudo probar contra arXiv real**: el lector del feed se probó con una entrada Atom de ejemplo. Falta confirmarla en Render.
+- **Idioma en Archive**: el campo `language` lo escribe cada usuario que sube el documento, así que hay documentos en español marcados de otra forma o sin idioma, y quedan fuera del filtro.
+- **Contenido de Archive**: las colecciones abiertas (como `opensource`) las sube la comunidad. Archive retira lo que infringe derechos de autor cuando se lo reportan, igual que cualquier sitio que aparece en la búsqueda web.
 
 ## Decision Log
+
+### 2026-11-15 - Buscador de textos: Internet Archive, arXiv, pestañas e idioma
+
+- **Alcance**: Seraphim Vision pasa a ser un buscador de textos de todo tipo (libros, artículos, documentos), no solo de PDFs de la web. Por ahora todo resultado sigue siendo un PDF, porque las miniaturas, la verificación y la descarga están hechas para ese formato.
+- **Se descartó unirlo con MorTV** como buscador de series y películas de sitios de terceros sin publicidad: esos sitios suelen alojar contenido sin licencia.
+- **Fuentes nuevas sin clave de API**: Internet Archive (libros y documentos) y arXiv (artículos). Se eligieron por ser gratuitas, abiertas y con contenido que se puede enlazar y descargar legalmente.
+- **Pestañas por tipo** (All, Books, Papers, Web) en vez de casillas por fuente: cada tipo corresponde hoy a una fuente, y All las mezcla.
+- **Filtro de idioma**, pedido junto al de tipo. Se aplica donde la fuente lo permite y avisa donde no.
+- **Un solo endpoint** (`/api/search` con `type` y `lang`) en lugar de uno por fuente: reutiliza la caché, la búsqueda compartida en curso, el límite por IP y el formato de respuesta.
+- **Archive sin verificación HTTP**: el PDF se elige de la lista de archivos del documento, que ya dice el formato y si es privado. Ahorra 20 peticiones por página.
+- **arXiv con fila y pausa** (3 s entre consultas, 2 min tras un 429), porque sus límites son estrictos y un tiempo de espera de 20 s en cada búsqueda de All arruinaría la experiencia.
+- **XML de arXiv con expresiones regulares**: el feed tiene una estructura fija y pocas etiquetas, así que no hace falta una librería.
 
 ### 2026-11-15 - Cursor normal del navegador
 

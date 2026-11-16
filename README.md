@@ -1,20 +1,29 @@
 # Seraphim Vision (beta)
 
-Seraphim Vision is a free PDF search engine for the web. It works like the classic Google `filetype:pdf` operator: you type a topic and it returns only links that really serve a PDF file.
+Seraphim Vision is a free search engine for texts: books, papers, documents and any PDF on the web. You type a topic and it returns only links that really serve a PDF file.
 
-Results come from [SearXNG](https://github.com/searxng/searxng), a free, open source metasearch engine. Seraphim Vision queries Brave, Google CSE, DuckDuckGo (with `filetype:pdf`) and Yandex (with `mime:pdf`) in parallel. A small Node.js server forces `filetype:pdf`, checks every link and discards anything that is not a real PDF. Both run inside a single Docker container, so SearXNG is never exposed to the internet.
+Results come from three sources:
+
+- **Web**: [SearXNG](https://github.com/searxng/searxng), a free, open source metasearch engine. Seraphim Vision queries Brave, Google CSE, DuckDuckGo (with `filetype:pdf`) and Yandex (with `mime:pdf`) in parallel and checks every link.
+- **Books**: [Internet Archive](https://archive.org), only items with a public PDF (lending library items are excluded).
+- **Papers**: [arXiv](https://arxiv.org), open access scientific articles.
+
+A small Node.js server queries the sources and merges the results. It runs with SearXNG inside a single Docker container, so SearXNG is never exposed to the internet.
 
 ## Features
 
-- Web-wide PDF search through SearXNG, with no paid API keys
-- Every result is verified (HTTP headers or the `%PDF-` file signature)
+- Search tabs by text type: All, Books (Internet Archive), Papers (arXiv) and Web (SearXNG)
+- Language filter (English, Spanish, French, German, Portuguese, Italian) for Web and Books
+- No paid API keys
+- Every web result is verified (HTTP headers or the `%PDF-` file signature); Archive PDFs are picked from the item's file list
+- Year and authors on Books and Papers results
 - First-page thumbnail on every result (rendered in the browser with pdf.js, only when the card scrolls into view), open the PDF at the source or download it
 - Pagination with "Load more"
-- Warning when a search engine is blocked (for example by a CAPTCHA)
+- Warning when a search engine or source is blocked (for example by a CAPTCHA or a rate limit)
 - In-memory cache: repeated searches answer instantly and known PDFs are not re-checked
 - Per-IP rate limiting and a download size limit
 - Pixel art interface in the AXM style (circuit board background, framed cards, CRT status terminal)
-- Shareable search URLs (`/?q=...`) with working back and forward navigation
+- Shareable search URLs (`/?q=...&type=books&lang=es`) with working back and forward navigation
 - Responsive design
 
 ## Deploy on Render (free)
@@ -40,7 +49,7 @@ Open `http://localhost:10000`.
 
 ## Run locally without Docker
 
-Requires Node.js 20.12+ and a SearXNG instance with JSON output enabled (see `searxng/settings.yml`). Create a `.env` file in the project root (optional, these are the defaults):
+Requires Node.js 20.12+. The Web tab also needs a SearXNG instance with JSON output enabled (see `searxng/settings.yml`); without it, Books and Papers still work and the Web source is reported as down. Create a `.env` file in the project root (optional, these are the defaults):
 
 ```
 PORT=3000
@@ -55,7 +64,7 @@ npm start
 ## Project structure
 
 ```
-server.js              Node server: static files, /api/search, /api/download, /api/pdf, /healthz
+server.js              Node server: static files, /api/search (Web, Internet Archive, arXiv), /api/download, /api/pdf, /healthz
 src/                   Search page (index.html, scripts/app.js, scripts/thumbnails.js, styles/main.css)
 src/vendor/pdfjs       pdf.js 6.5.438 (Apache 2.0), copied from the pdfjs-dist package
 src/css, src/js        AXM style kit (axm.css, axm.js), copied unchanged

@@ -5,14 +5,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#000308">
-    <meta name="description" content="Free PDF search across the web. Every result is checked to be a real PDF.">
+    <meta name="description" content="Free search for books, papers and PDFs from the web, Internet Archive and arXiv.">
     <title>Seraphim Vision</title>
     <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
 
     <!-- Fuente pixel precargada y estilo AXM -->
     <link rel="preload" href="assets/fonts/BitPap.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="stylesheet" href="css/axm.css?v=1">
-    <link rel="stylesheet" href="styles/main.css?v=11">
+    <link rel="stylesheet" href="styles/main.css?v=12">
 </head>
 
 <body class="is_home">
@@ -34,14 +34,14 @@
                         <span class="ax_glitch_dash ax_glitch_dash_red" style="right: -40px; top: 10px; width: 22px;"></span>
                         <h1 class="ax_logo sv_logo ax_glitch_target">Seraphim vision</h1>
                     </div>
-                    <p class="ax_subtitle">SERAPHIM // PDF SEARCH</p>
+                    <p class="ax_subtitle">SERAPHIM // TEXT SEARCH</p>
                 </header>
 
                 <!-- Título de la vista de resultados -->
                 <header class="sv_head sv_results_only">
                     <a id="home-link" class="sv_home_link" href="/">&lt; home</a>
                     <h2 id="results-title" class="ax_title">RESULTS</h2>
-                    <p class="ax_subtitle">SERAPHIM // PDF SEARCH</p>
+                    <p class="ax_subtitle">SERAPHIM // TEXT SEARCH</p>
                 </header>
 
                 <!-- Barra de búsqueda dentro de una ventana -->
@@ -50,8 +50,8 @@
                         <div class="ax_frame sv_search_frame" style="--accent: var(--cyan);">
                             <div class="ax_face sv_search_face">
                                 <span class="sv_prompt" aria-hidden="true">&gt;</span>
-                                <input id="search-input" type="search" name="q" placeholder="search pdfs"
-                                    aria-label="Search PDFs" maxlength="200" autocomplete="off" spellcheck="false" required>
+                                <input id="search-input" type="search" name="q" placeholder="search books, papers, pdfs"
+                                    aria-label="Search texts" maxlength="200" autocomplete="off" spellcheck="false" required>
                                 <button id="search-button" class="ax_frame ax_button ax_button_small" type="submit"
                                     style="--accent: var(--gold_button);">
                                     <span class="ax_face"><span>Search</span></span>
@@ -60,6 +60,30 @@
                         </div>
                     </div>
                 </form>
+
+                <!-- Filtros: tipo de texto (pestañas) e idioma -->
+                <div class="sv_filters">
+                    <div class="sv_tabs" role="group" aria-label="Text type">
+                        <button class="ax_frame ax_button ax_button_small sv_tab" type="button" data-type="all" aria-pressed="true"><span class="ax_face"><span>All</span></span></button>
+                        <button class="ax_frame ax_button ax_button_small sv_tab" type="button" data-type="books" aria-pressed="false" title="Internet Archive"><span class="ax_face"><span>Books</span></span></button>
+                        <button class="ax_frame ax_button ax_button_small sv_tab" type="button" data-type="papers" aria-pressed="false" title="arXiv"><span class="ax_face"><span>Papers</span></span></button>
+                        <button class="ax_frame ax_button ax_button_small sv_tab" type="button" data-type="web" aria-pressed="false" title="PDFs from web search engines"><span class="ax_face"><span>Web</span></span></button>
+                    </div>
+                    <div class="ax_frame sv_select_frame">
+                        <label class="ax_face sv_select_face">
+                            <span class="sv_select_label">lang</span>
+                            <select id="language-select" aria-label="Language">
+                                <option value="any">any</option>
+                                <option value="en">english</option>
+                                <option value="es">español</option>
+                                <option value="fr">français</option>
+                                <option value="de">deutsch</option>
+                                <option value="pt">português</option>
+                                <option value="it">italiano</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
 
                 <!-- Sugerencias (solo en la portada) -->
                 <div class="sv_suggestions sv_home_only">
@@ -128,12 +152,12 @@
         </section>
 
         <footer class="sv_footer">
-            <p>(c) 2026 Ben Farz // powered by SearXNG</p>
+            <p>(c) 2026 Ben Farz // powered by SearXNG, Internet Archive and arXiv</p>
         </footer>
     </main>
 
     <script src="js/axm.js?v=1"></script>
-    <script type="module" src="scripts/app.js?v=5"></script>
+    <script type="module" src="scripts/app.js?v=6"></script>
 </body>
 
 </html>

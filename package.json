@@ -1,7 +1,7 @@
 {
   "name": "seraphim-vision",
   "version": "0.2.0",
-  "description": "Free PDF search across the web, powered by a self-hosted SearXNG instance",
+  "description": "Free search for books, papers and PDFs from the web (SearXNG), Internet Archive and arXiv",
   "type": "module",
   "private": true,
   "engines": {

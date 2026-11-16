@@ -53,6 +53,45 @@ const ENGINE_GROUPS = [
   { engines: "yandex", pdf_operator: "mime:pdf" },
 ];
 
+// Fuentes que consulta cada pestaña de tipo de texto
+const TEXT_TYPES = {
+  all: ["web", "archive", "arxiv"],
+  books: ["archive"],
+  papers: ["arxiv"],
+  web: ["web"],
+};
+const DEFAULT_TEXT_TYPE = "all";
+
+// Idiomas del filtro: código para SearXNG y valores que usa Internet Archive en su campo language
+const LANGUAGES = {
+  any: null,
+  en: { searxng: "en", archive: ["eng", "English"] },
+  es: { searxng: "es", archive: ["spa", "Spanish", "Español"] },
+  fr: { searxng: "fr", archive: ["fre", "fra", "French"] },
+  de: { searxng: "de", archive: ["ger", "deu", "German"] },
+  pt: { searxng: "pt", archive: ["por", "Portuguese"] },
+  it: { searxng: "it", archive: ["ita", "Italian"] },
+};
+const DEFAULT_LANGUAGE = "any";
+
+// Internet Archive: búsqueda avanzada y lista de archivos de cada documento
+const ARCHIVE_URL = "https://archive.org";
+const ARCHIVE_ROWS = 20;
+const ARCHIVE_TIMEOUT_MS = 15000;
+const ARCHIVE_FILES_TIMEOUT_MS = 8000;
+// Formatos de PDF de Archive, del preferido al menos preferido
+const ARCHIVE_PDF_FORMATS = ["Text PDF", "Image Container PDF", "Additional Text PDF"];
+// Colecciones de préstamo: sus PDFs no son públicos
+const ARCHIVE_LENDING_COLLECTIONS = "inlibrary OR printdisabled OR lendinglibrary";
+
+// arXiv: pide no más de una consulta cada 3 segundos
+const ARXIV_API_URL = "https://export.arxiv.org/api/query";
+const ARXIV_ROWS = 20;
+const ARXIV_TIMEOUT_MS = 20000;
+const ARXIV_MIN_INTERVAL_MS = 3000;
+const ARXIV_COOLDOWN_MS = 2 * 60 * 1000;
+const SNIPPET_MAX_LENGTH = 300;
+
 // Caché en memoria (se pierde si el proceso se reinicia o Render lo duerme)
 const MINUTE_MS = 60 * 1000;
 const SEARCH_CACHE_TTL_MS = SEARCH_CACHE_TTL_MINUTES * MINUTE_MS;
@@ -61,6 +100,8 @@ const SEARCH_CACHE_MAX_ENTRIES = 500;
 const VERIFY_CACHE_PDF_TTL_MS = 6 * 60 * MINUTE_MS;
 const VERIFY_CACHE_NOT_PDF_TTL_MS = 30 * MINUTE_MS;
 const VERIFY_CACHE_MAX_ENTRIES = 5000;
+const ARCHIVE_FILES_CACHE_TTL_MS = 6 * 60 * MINUTE_MS;
+const ARCHIVE_FILES_CACHE_MAX_ENTRIES = 2000;
 
 const LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
 
@@ -198,6 +239,8 @@ function cache_set(cache, key, value, ttl_ms) {
 
 const search_cache = create_cache(SEARCH_CACHE_MAX_ENTRIES);
 const verify_cache = create_cache(VERIFY_CACHE_MAX_ENTRIES);
+// PDF público elegido de cada documento de Archive (o null si no tiene)
+const archive_files_cache = create_cache(ARCHIVE_FILES_CACHE_MAX_ENTRIES);
 // Búsquedas en curso, para que dos peticiones iguales compartan el trabajo
 const searches_in_flight = new Map();
 
@@ -437,7 +480,7 @@ function clean_user_query(query) {
 }
 
 // Pide una página de resultados a SearXNG para un grupo de motores
-async function fetch_searxng_results(clean_query, page, engine_group) {
+async function fetch_searxng_results(clean_query, page, engine_group, language) {
   const params = new URLSearchParams({
     q: `${clean_query} ${engine_group.pdf_operator}`,
     format: "json",
@@ -445,6 +488,10 @@ async function fetch_searxng_results(clean_query, page, engine_group) {
     engines: engine_group.engines,
     safesearch: "0",
   });
+  // Filtro de idioma: SearXNG lo pasa a cada motor
+  if (LANGUAGES[language] !== null) {
+    params.set("language", LANGUAGES[language].searxng);
+  }
   const search_url = `${SEARXNG_URL}/search?${params}`;
 
   let response;
@@ -466,12 +513,12 @@ async function fetch_searxng_results(clean_query, page, engine_group) {
   return response.json();
 }
 
-// Busca PDFs, elimina duplicados y verifica cada enlace (sin caché de búsqueda)
-async function run_pdf_search(clean_query, page) {
+// Fuente Web: busca PDFs con SearXNG, elimina duplicados y verifica cada enlace
+async function search_web_source(clean_query, page, language) {
   // 1. Consultar SearXNG con cada grupo de motores en paralelo
   const group_requests = [];
   for (const engine_group of ENGINE_GROUPS) {
-    group_requests.push(fetch_searxng_results(clean_query, page, engine_group));
+    group_requests.push(fetch_searxng_results(clean_query, page, engine_group, language));
   }
   const group_outcomes = await Promise.allSettled(group_requests);
 
@@ -529,47 +576,559 @@ async function run_pdf_search(clean_query, page) {
       continue;
     }
     results.push({
+      source: "web",
       title: candidate.title || "",
       url: candidate.url,
       domain: new URL(candidate.url).hostname,
       snippet: candidate.content || "",
+      details: "",
       engines: candidate.engines || [],
       size_bytes: verification.size_bytes,
     });
   }
 
-  log("info", `Search "${clean_query}" page ${page}: ${candidates.length} candidates, ${results.length} verified PDFs`);
+  log("info", `Web search "${clean_query}" page ${page}: ${candidates.length} candidates, ${results.length} verified PDFs`);
   return {
-    body: {
-      page,
-      results,
-      candidates: candidates.length,
-      rejected: candidates.length - results.length,
-      has_more: candidates.length > 0 && page < MAX_PAGE,
-      unresponsive_engines,
-    },
+    results,
+    candidates: candidates.length,
+    rejected: candidates.length - results.length,
+    has_more: candidates.length > 0 && page < MAX_PAGE,
+    unresponsive_engines,
+    notices: [],
     // Resultado pobre: falló un grupo entero o no hubo candidatos
     is_degraded: failed_groups > 0 || candidates.length === 0,
   };
 }
 
-// Busca PDFs usando la caché; búsquedas iguales en curso comparten el trabajo
-async function search_pdfs(query, page) {
-  // 1. Clave normalizada: sin operadores, espacios simples y minúsculas
+// =============================================
+// Text helpers (respuestas de APIs externas)
+// ---------------------------------------------
+
+// Recorta un texto largo a SNIPPET_MAX_LENGTH caracteres
+function shorten_text(text) {
+  const clean_text = String(text).replace(/\s+/g, " ").trim();
+  if (clean_text.length <= SNIPPET_MAX_LENGTH) {
+    return clean_text;
+  }
+  return `${clean_text.slice(0, SNIPPET_MAX_LENGTH - 3).trim()}...`;
+}
+
+// Devuelve el primer valor si la API manda un arreglo, o el valor tal cual
+function first_value(value) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return "";
+    }
+    return value[0];
+  }
+  if (value === undefined || value === null) {
+    return "";
+  }
+  return value;
+}
+
+// Une hasta tres autores y agrega "et al." si hay más
+function format_authors(authors) {
+  if (len_of_list(authors) === 0) {
+    return "";
+  }
+  const shown_authors = authors.slice(0, 3).join(", ");
+  if (authors.length > 3) {
+    return `${shown_authors} et al.`;
+  }
+  return shown_authors;
+}
+
+// Longitud de un arreglo, tratando lo que no es arreglo como vacío
+function len_of_list(items) {
+  if (!Array.isArray(items)) {
+    return 0;
+  }
+  return items.length;
+}
+
+// Une año y autores en una sola línea de detalles
+function build_details(year, authors) {
+  const parts = [];
+  if (year !== "") {
+    parts.push(year);
+  }
+  if (authors !== "") {
+    parts.push(authors);
+  }
+  return parts.join(" // ");
+}
+
+// Quita los caracteres especiales de Lucene para que la consulta no rompa la sintaxis
+function sanitize_lucene_query(clean_query) {
+  return clean_query.replace(/[()[\]{}^~:\\/!]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// Decodifica las entidades XML más comunes
+function decode_xml_entities(text) {
+  return text
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (match, code) => {
+      return String.fromCodePoint(Number(code));
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (match, code) => {
+      return String.fromCodePoint(parseInt(code, 16));
+    })
+    .replace(/&amp;/g, "&");
+}
+
+// Devuelve el texto de la primera etiqueta XML con ese nombre, o ""
+function read_xml_tag(xml, tag_name) {
+  const match = new RegExp(`<${tag_name}[^>]*>([\\s\\S]*?)</${tag_name}>`).exec(xml);
+  if (match === null) {
+    return "";
+  }
+  return decode_xml_entities(match[1]).trim();
+}
+
+// =============================================
+// Internet Archive source
+// ---------------------------------------------
+
+// Elige el PDF público preferido de la lista de archivos de un documento
+function pick_archive_pdf(files) {
+  // 1. Solo PDFs que no sean privados
+  const pdf_files = [];
+  for (const file of files) {
+    if (typeof file.name !== "string" || !file.name.toLowerCase().endsWith(".pdf")) {
+      continue;
+    }
+    if (file.private === "true" || file.private === true) {
+      continue;
+    }
+    pdf_files.push(file);
+  }
+  if (pdf_files.length === 0) {
+    return null;
+  }
+
+  // 2. Primero por formato preferido y, dentro de cada formato, el original
+  for (const format_name of ARCHIVE_PDF_FORMATS) {
+    let derivative_match = null;
+    for (const file of pdf_files) {
+      if (file.format !== format_name) {
+        continue;
+      }
+      if (file.source === "original") {
+        return file;
+      }
+      if (derivative_match === null) {
+        derivative_match = file;
+      }
+    }
+    if (derivative_match !== null) {
+      return derivative_match;
+    }
+  }
+  return pdf_files[0];
+}
+
+// Arma la URL de descarga de un archivo de Archive, codificando cada tramo de la ruta
+function build_archive_file_url(identifier, file_name) {
+  const encoded_segments = [];
+  for (const segment of file_name.split("/")) {
+    encoded_segments.push(encodeURIComponent(segment));
+  }
+  return `${ARCHIVE_URL}/download/${encodeURIComponent(identifier)}/${encoded_segments.join("/")}`;
+}
+
+// Busca el PDF público de un documento de Archive; usa caché porque cada documento es una petición
+async function find_archive_pdf(identifier) {
+  // 1. Caché (null también se guarda: el documento no tiene PDF público)
+  const cached = cache_get(archive_files_cache, identifier);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  // 2. Pedir la lista de archivos del documento
+  const files_url = `${ARCHIVE_URL}/metadata/${encodeURIComponent(identifier)}/files`;
+  const response = await fetch(files_url, {
+    headers: { "user-agent": USER_AGENT },
+    signal: AbortSignal.timeout(ARCHIVE_FILES_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(`Archive metadata for ${identifier} responded with status ${response.status}`);
+  }
+  const data = await response.json();
+
+  // 3. Elegir el PDF y guardarlo
+  let pdf_info = null;
+  const pdf_file = pick_archive_pdf(data.result || []);
+  if (pdf_file !== null) {
+    pdf_info = { url: build_archive_file_url(identifier, pdf_file.name), size_bytes: parse_size(String(pdf_file.size || "")) };
+  }
+  cache_set(archive_files_cache, identifier, pdf_info, ARCHIVE_FILES_CACHE_TTL_MS);
+  return pdf_info;
+}
+
+// Arma la consulta de búsqueda avanzada de Archive: textos con PDF público
+function build_archive_query(clean_query, language) {
+  let archive_query = `(${sanitize_lucene_query(clean_query)}) AND mediatype:texts`;
+  archive_query += ` AND format:("Text PDF" OR "Image Container PDF")`;
+  archive_query += ` AND NOT collection:(${ARCHIVE_LENDING_COLLECTIONS})`;
+  archive_query += " AND NOT access-restricted-item:true";
+  if (LANGUAGES[language] !== null) {
+    const language_values = [];
+    for (const value of LANGUAGES[language].archive) {
+      language_values.push(`"${value}"`);
+    }
+    archive_query += ` AND language:(${language_values.join(" OR ")})`;
+  }
+  return archive_query;
+}
+
+// Fuente Books: busca textos en Internet Archive y devuelve los que tienen PDF público
+async function search_archive_source(clean_query, page, language) {
+  // 1. Búsqueda avanzada
+  const params = new URLSearchParams({
+    q: build_archive_query(clean_query, language),
+    rows: String(ARCHIVE_ROWS),
+    page: String(page),
+    output: "json",
+  });
+  for (const field_name of ["identifier", "title", "description", "creator", "year"]) {
+    params.append("fl[]", field_name);
+  }
+  let response;
+  try {
+    response = await fetch(`${ARCHIVE_URL}/advancedsearch.php?${params}`, {
+      headers: { "user-agent": USER_AGENT },
+      signal: AbortSignal.timeout(ARCHIVE_TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new HttpError(502, `Could not reach Internet Archive: ${error.message}`);
+  }
+  if (!response.ok) {
+    throw new HttpError(502, `Internet Archive responded with status ${response.status}`);
+  }
+  const data = await response.json();
+  if (data.response === undefined) {
+    throw new HttpError(502, `Internet Archive returned an unexpected response: ${JSON.stringify(data).slice(0, 200)}`);
+  }
+  const documents = data.response.docs || [];
+
+  // 2. Buscar el PDF de cada documento en paralelo; un fallo descarta solo ese documento
+  const pdf_requests = [];
+  for (const document of documents) {
+    pdf_requests.push(find_archive_pdf(String(document.identifier)));
+  }
+  const pdf_outcomes = await Promise.allSettled(pdf_requests);
+
+  // 3. Armar los resultados con el mismo formato que la Web
+  const results = [];
+  for (const [index, document] of documents.entries()) {
+    const outcome = pdf_outcomes[index];
+    if (outcome.status === "rejected") {
+      log("debug", `Archive item ${document.identifier} skipped: ${outcome.reason.message}`);
+      continue;
+    }
+    if (outcome.value === null) {
+      log("debug", `Archive item ${document.identifier} has no public PDF`);
+      continue;
+    }
+    // El PDF ya viene confirmado por la metadata: se guarda para que las miniaturas no lo verifiquen
+    cache_set(verify_cache, outcome.value.url, { is_pdf: true, size_bytes: outcome.value.size_bytes, reason: "archive metadata" }, VERIFY_CACHE_PDF_TTL_MS);
+
+    let authors = [];
+    if (Array.isArray(document.creator)) {
+      authors = document.creator;
+    } else if (typeof document.creator === "string") {
+      authors = [document.creator];
+    }
+    results.push({
+      source: "archive",
+      title: String(first_value(document.title) || document.identifier),
+      url: outcome.value.url,
+      domain: "archive.org",
+      snippet: shorten_text(first_value(document.description)),
+      details: build_details(String(first_value(document.year)), format_authors(authors)),
+      engines: ["internet archive"],
+      size_bytes: outcome.value.size_bytes,
+    });
+  }
+
+  const total_found = Number(data.response.numFound || 0);
+  log("info", `Archive search "${clean_query}" page ${page}: ${documents.length} candidates, ${results.length} PDFs`);
+  return {
+    results,
+    candidates: documents.length,
+    rejected: documents.length - results.length,
+    has_more: page * ARCHIVE_ROWS < total_found && page < MAX_PAGE,
+    unresponsive_engines: [],
+    notices: [],
+    is_degraded: documents.length === 0,
+  };
+}
+
+// =============================================
+// arXiv source
+// ---------------------------------------------
+
+// Momento a partir del cual se puede hacer la siguiente consulta a arXiv
+let arxiv_next_slot_at = 0;
+// Tras un 429 o un tiempo agotado, arXiv se salta hasta este momento
+let arxiv_cooldown_until = 0;
+
+// Espera su turno para respetar el intervalo mínimo entre consultas a arXiv
+async function wait_for_arxiv_slot() {
+  const now = Date.now();
+  const slot_at = Math.max(now, arxiv_next_slot_at);
+  arxiv_next_slot_at = slot_at + ARXIV_MIN_INTERVAL_MS;
+  if (slot_at > now) {
+    await new Promise((resolve) => {
+      setTimeout(resolve, slot_at - now);
+    });
+  }
+}
+
+// Convierte la consulta en la sintaxis de arXiv: cada palabra o frase entre comillas en todos los campos
+function build_arxiv_query(clean_query) {
+  const terms = clean_query.match(/"[^"]+"|\S+/g) || [];
+  const arxiv_terms = [];
+  for (const term of terms) {
+    const clean_term = term.replace(/["():]/g, " ").replace(/\s+/g, " ").trim();
+    if (clean_term === "" || clean_term === "AND" || clean_term === "OR" || clean_term === "ANDNOT") {
+      continue;
+    }
+    if (clean_term.includes(" ")) {
+      arxiv_terms.push(`all:"${clean_term}"`);
+    } else {
+      arxiv_terms.push(`all:${clean_term}`);
+    }
+  }
+  if (arxiv_terms.length === 0) {
+    throw new HttpError(400, "Query has no searchable terms for arXiv");
+  }
+  return arxiv_terms.join(" AND ");
+}
+
+// Extrae el enlace al PDF de una entrada de arXiv (o lo arma desde el enlace del resumen)
+function read_arxiv_pdf_url(entry_xml, abstract_url) {
+  const link_tags = entry_xml.match(/<link\b[^>]*>/g) || [];
+  for (const link_tag of link_tags) {
+    if (!/title="pdf"/.test(link_tag)) {
+      continue;
+    }
+    const href_match = /href="([^"]+)"/.exec(link_tag);
+    if (href_match !== null) {
+      return decode_xml_entities(href_match[1]).replace(/^http:/, "https:");
+    }
+  }
+  return abstract_url.replace("/abs/", "/pdf/").replace(/^http:/, "https:");
+}
+
+// Convierte una entrada del feed Atom de arXiv al formato de resultados
+function parse_arxiv_entry(entry_xml) {
+  const abstract_url = read_xml_tag(entry_xml, "id");
+  const authors = [];
+  for (const author_match of entry_xml.matchAll(/<author>\s*<name>([^<]*)<\/name>/g)) {
+    authors.push(decode_xml_entities(author_match[1]).trim());
+  }
+  return {
+    source: "arxiv",
+    title: read_xml_tag(entry_xml, "title").replace(/\s+/g, " "),
+    url: read_arxiv_pdf_url(entry_xml, abstract_url),
+    domain: "arxiv.org",
+    snippet: shorten_text(read_xml_tag(entry_xml, "summary")),
+    details: build_details(read_xml_tag(entry_xml, "published").slice(0, 4), format_authors(authors)),
+    engines: ["arxiv"],
+    size_bytes: null,
+  };
+}
+
+// Fuente Papers: busca artículos en arXiv
+async function search_arxiv_source(clean_query, page, language) {
+  // 1. Respetar el intervalo entre consultas y pedir la página
+  const params = new URLSearchParams({
+    search_query: build_arxiv_query(clean_query),
+    start: String((page - 1) * ARXIV_ROWS),
+    max_results: String(ARXIV_ROWS),
+    sortBy: "relevance",
+  });
+  // Si arXiv nos frenó hace poco, no se espera otra vez el tiempo límite
+  const cooldown_left_ms = arxiv_cooldown_until - Date.now();
+  if (cooldown_left_ms > 0) {
+    throw new HttpError(503, `arXiv is rate limiting this server, retry in ${Math.ceil(cooldown_left_ms / 1000)} s`);
+  }
+  await wait_for_arxiv_slot();
+  let response;
+  try {
+    response = await fetch(`${ARXIV_API_URL}?${params}`, {
+      headers: { "user-agent": USER_AGENT },
+      signal: AbortSignal.timeout(ARXIV_TIMEOUT_MS),
+    });
+  } catch (error) {
+    arxiv_cooldown_until = Date.now() + ARXIV_COOLDOWN_MS;
+    throw new HttpError(502, `Could not reach arXiv: ${error.message}`);
+  }
+  if (response.status === 429) {
+    arxiv_cooldown_until = Date.now() + ARXIV_COOLDOWN_MS;
+    await response.body.cancel();
+    throw new HttpError(503, "arXiv rate limit reached, try again in a few minutes");
+  }
+  if (!response.ok) {
+    throw new HttpError(502, `arXiv responded with status ${response.status}`);
+  }
+  const xml = await response.text();
+  if (!xml.includes("<feed")) {
+    throw new HttpError(502, `arXiv returned an unexpected response: ${xml.slice(0, 100)}`);
+  }
+
+  // 2. Leer las entradas del feed; arXiv informa errores como una entrada titulada "Error"
+  const results = [];
+  for (const entry_match of xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)) {
+    const result = parse_arxiv_entry(entry_match[1]);
+    if (result.title === "Error") {
+      throw new HttpError(502, `arXiv rejected the query: ${result.snippet}`);
+    }
+    results.push(result);
+  }
+
+  // 3. arXiv no filtra por idioma: se avisa en vez de ignorarlo en silencio
+  const notices = [];
+  if (LANGUAGES[language] !== null) {
+    notices.push("arxiv: language filter not supported, showing all languages");
+  }
+  const total_found = Number(read_xml_tag(xml, "opensearch:totalResults") || "0");
+  log("info", `arXiv search "${clean_query}" page ${page}: ${results.length} papers of ${total_found}`);
+  return {
+    results,
+    candidates: results.length,
+    rejected: 0,
+    has_more: page * ARXIV_ROWS < total_found && page < MAX_PAGE,
+    unresponsive_engines: [],
+    notices,
+    is_degraded: results.length === 0,
+  };
+}
+
+// =============================================
+// Text search (une las fuentes de cada tipo)
+// ---------------------------------------------
+
+const SOURCE_SEARCHES = {
+  web: search_web_source,
+  archive: search_archive_source,
+  arxiv: search_arxiv_source,
+};
+
+const SOURCE_LABELS = {
+  web: "web",
+  archive: "internet archive",
+  arxiv: "arxiv",
+};
+
+// Mezcla las listas de cada fuente alternando un resultado de cada una
+function interleave_results(result_lists) {
+  const merged = [];
+  let index = 0;
+  let has_items = true;
+  while (has_items) {
+    has_items = false;
+    for (const result_list of result_lists) {
+      if (index < result_list.length) {
+        merged.push(result_list[index]);
+        has_items = true;
+      }
+    }
+    index += 1;
+  }
+  return merged;
+}
+
+// Consulta en paralelo las fuentes del tipo elegido y une sus respuestas (sin caché)
+async function run_text_search(clean_query, page, text_type, language) {
+  // 1. Lanzar todas las fuentes; si una falla, se reporta y se sigue con las demás
+  const source_names = TEXT_TYPES[text_type];
+  const source_requests = [];
+  for (const source_name of source_names) {
+    source_requests.push(SOURCE_SEARCHES[source_name](clean_query, page, language));
+  }
+  const source_outcomes = await Promise.allSettled(source_requests);
+
+  // 2. Juntar resultados, motores caídos y avisos
+  const result_lists = [];
+  const unresponsive_engines = [];
+  const notices = [];
+  let candidates = 0;
+  let rejected = 0;
+  let has_more = false;
+  let is_degraded = false;
+  let first_error = null;
+  for (const [index, outcome] of source_outcomes.entries()) {
+    const source_name = source_names[index];
+    if (outcome.status === "rejected") {
+      log("warn", `Source "${source_name}" failed: ${outcome.reason.message}`);
+      unresponsive_engines.push({ name: SOURCE_LABELS[source_name], error: outcome.reason.message });
+      is_degraded = true;
+      if (first_error === null) {
+        first_error = outcome.reason;
+      }
+      continue;
+    }
+    const source_body = outcome.value;
+    result_lists.push(source_body.results);
+    candidates += source_body.candidates;
+    rejected += source_body.rejected;
+    if (source_body.has_more) {
+      has_more = true;
+    }
+    if (source_body.is_degraded) {
+      is_degraded = true;
+    }
+    for (const engine of source_body.unresponsive_engines) {
+      unresponsive_engines.push(engine);
+    }
+    for (const notice of source_body.notices) {
+      notices.push(notice);
+    }
+  }
+
+  // 3. Si fallaron todas las fuentes, devolver el primer error
+  if (len_of_list(result_lists) === 0) {
+    throw first_error;
+  }
+  return {
+    body: {
+      page,
+      type: text_type,
+      language,
+      results: interleave_results(result_lists),
+      candidates,
+      rejected,
+      has_more,
+      unresponsive_engines,
+      notices,
+    },
+    is_degraded,
+  };
+}
+
+// Busca textos usando la caché; búsquedas iguales en curso comparten el trabajo
+async function search_texts(query, page, text_type, language) {
+  // 1. Clave normalizada: tipo, idioma, consulta sin operadores en minúsculas y página
   const clean_query = clean_user_query(query);
-  const cache_key = `${clean_query.toLowerCase()}|${page}`;
+  const cache_key = `${text_type}|${language}|${clean_query.toLowerCase()}|${page}`;
 
   // 2. Respuesta guardada
   const cached_body = cache_get(search_cache, cache_key);
   if (cached_body !== undefined) {
-    log("info", `Cache hit for "${clean_query}" page ${page}`);
+    log("info", `Cache hit for "${clean_query}" (${text_type}, ${language}) page ${page}`);
     return { ...cached_body, query, cached: true };
   }
 
   // 3. Misma búsqueda ya en curso: esperar su resultado
   let search_promise = searches_in_flight.get(cache_key);
   if (search_promise === undefined) {
-    search_promise = run_pdf_search(clean_query, page);
+    search_promise = run_text_search(clean_query, page, text_type, language);
     searches_in_flight.set(cache_key, search_promise);
   }
 
@@ -608,8 +1167,17 @@ async function handle_search(res, request_url) {
     throw new HttpError(400, `Parameter 'page' must be an integer between 1 and ${MAX_PAGE}`);
   }
 
+  const text_type = request_url.searchParams.get("type") || DEFAULT_TEXT_TYPE;
+  if (!Object.hasOwn(TEXT_TYPES, text_type)) {
+    throw new HttpError(400, `Parameter 'type' must be one of: ${Object.keys(TEXT_TYPES).join(", ")}`);
+  }
+  const language = request_url.searchParams.get("lang") || DEFAULT_LANGUAGE;
+  if (!Object.hasOwn(LANGUAGES, language)) {
+    throw new HttpError(400, `Parameter 'lang' must be one of: ${Object.keys(LANGUAGES).join(", ")}`);
+  }
+
   // 2. Buscar y responder
-  const body = await search_pdfs(query, page);
+  const body = await search_texts(query, page, text_type, language);
   send_json(res, 200, body);
 }
 
