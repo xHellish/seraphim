@@ -9,6 +9,20 @@
 }
 
 /* =============================================
+   Cursor del sistema
+   El kit usa cursores pixel art; aquí se vuelve al cursor normal del navegador.
+   --------------------------------------------- */
+body {
+    cursor: auto;
+}
+
+a,
+button,
+[role="button"] {
+    cursor: pointer;
+}
+
+/* =============================================
    Dígito 0 legible
    En BitPap el 0 se confunde con el 8 a tamaño de texto. Los resultados traen años, versiones
    y tamaños de archivo, así que solo el carácter 0 se toma de una fuente del sistema.

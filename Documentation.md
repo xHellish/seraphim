@@ -30,6 +30,7 @@ Navegador  ->  :PORT | server.js (Node)  ->  127.0.0.1:8080 SearXNG    | ->  Bra
 - **Frontend** (`src/`): HTML, CSS y JavaScript sin frameworks. Pinta los resultados con `createElement` y `textContent`, así que los títulos y fragmentos de páginas externas no pueden inyectar código. No usa `innerHTML`.
   - **Estilo AXM**: es el kit del portafolio (`axm-web-style`), basado en la UI del juego AGI x Machina: pixel art, fondo de placa de circuitos, cartas con marco en escalón, ventanas con corchetes y terminales CRT. Sus archivos se copiaron sin modificar a `css/axm.css`, `js/axm.js` y `assets/` (fuente, fondos y cursores).
   - **Estilos propios**: `styles/main.css` solo añade lo que el kit no trae (barra de búsqueda, resultados y el layout centrado). Para actualizar el kit basta con reemplazar los tres archivos de arriba.
+  - **Cursor del sistema**: el kit cambia el cursor por flechas y manos pixel art (`assets/cursors/`). `main.css` lo devuelve al cursor normal del navegador (`auto` en la página y `pointer` en enlaces y botones). Los archivos de los cursores siguen en `assets/` para no modificar el kit.
   - **Sin barra lateral**: la página es una sola columna centrada. Como el kit reserva el espacio de `.ax_sidebar` en `.ax_main`, `main.css` lo anula (`margin-left: 0`). `axm.js` no necesita botones de navegación: si no hay `data-section`, su navegación no hace nada.
   - **Dos vistas dentro de Search**: portada (logo, barra y sugerencias) y resultados (título RESULTS, terminal de estado y cartas). Es el mismo DOM; cambia solo la clase del `body` (`is_home` o `is_results`).
   - **Terminal de estado**: una terminal CRT de altura fija que escribe un log y baja sola, como una terminal real: `> search "..."`, `found`, `time`, `(cache)`, motores caídos y errores. Las líneas del resumen se agregan al mismo log; "Load more" lo continúa y una búsqueda nueva lo limpia.
@@ -157,6 +158,10 @@ El límite por IP usa el primer valor de `X-Forwarded-For`. Un cliente puede fal
 - **Bloqueos de bots**: algunos sitios bloquean peticiones que no vienen de un navegador; esos PDFs se descartan aunque existan.
 
 ## Decision Log
+
+### 2026-11-15 - Cursor normal del navegador
+
+- Se quitaron los cursores pixel art del kit AXM y se volvió al cursor del sistema. La regla vive en `main.css`, así que el kit sigue sin modificarse.
 
 ### 2026-11-14 - Miniatura de la primera página en lugar del visor
 
